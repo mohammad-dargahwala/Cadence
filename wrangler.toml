@@ -1,0 +1,21 @@
+name = "cadence"
+main = "src/worker.js"
+compatibility_date = "2026-08-19"
+
+[[routes]]
+pattern = "cadence.mdargahwala.tech"
+custom_domain = true
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = ["/", "/api/*"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "cadence"
+database_id = "c304bd4c-f8cb-48eb-801d-dd23bfad7118"
+migrations_dir = "migrations"
+
+[observability]
+enabled = true

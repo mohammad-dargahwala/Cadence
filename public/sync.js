@@ -59,15 +59,15 @@
    * identity
    * ---------------------------------------------------------------- */
 
-  /* Identity is now an account: a name and a passphrase. The server maps that
-   * pair to a workspace id, so signing in on a second device fetches the same
+  /* Identity is now an account: a name and a PIN. The server maps that pair
+   * to a workspace id, so signing in on a second device fetches the same
    * workspace instead of provisioning an empty one — which is exactly what the
    * old ?w= share link did, minus the part where the credential travelled in a
    * URL that lands in history, screenshots and referrer headers.
    *
    * The workspace id is still the API's bearer credential; the account is what
    * gates access to it. Nothing is stored beyond the name and the id — the
-   * passphrase is sent once per sign-in and never written down here. */
+   * PIN is sent once per sign-in and never written down here. */
 
   var deviceId = safeLS(function () {
     var d = localStorage.getItem(LS_DEVICE);
@@ -312,14 +312,14 @@
    * sign-in lives here next to the UI that shows it. */
   var AUTH_MESSAGES = {
     bad_name: 'Enter a name of 40 characters or fewer.',
-    bad_passphrase: 'Passphrase must be at least 4 characters.',
+    bad_pin: 'PIN must be 4–8 digits.',
     name_taken: 'That name is already taken.',
     no_such_user: 'No account with that name.',
-    bad_credentials: 'That passphrase does not match.',
+    bad_credentials: 'That PIN does not match.',
     rate_limited: 'Too many attempts. Try again in a few minutes.',
   };
 
-  function authRequest(kind, name, passphrase, isNew) {
+  function authRequest(kind, name, pin, isNew) {
     if (state.authBusy) return Promise.resolve(false);
     state.authBusy = true;
     state.authError = null;
@@ -328,7 +328,7 @@
     return fetch(API + '/api/auth/' + kind, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: name, passphrase: passphrase }),
+      body: JSON.stringify({ name: name, pin: pin }),
     })
       .then(function (r) {
         return r.json().then(
@@ -345,7 +345,7 @@
         return true;
       })
       .catch(function () {
-        // Distinct from a rejected passphrase: the request never landed.
+        // Distinct from a rejected PIN: the request never landed.
         state.authError = 'Cannot reach the server. Check your connection.';
         return false;
       })
@@ -585,16 +585,16 @@
       };
     },
 
-    /** Sign in to an existing account. Same name and passphrase on any device
+    /** Sign in to an existing account. Same name and PIN on any device
      *  resolves to the same workspace, so history follows the person. */
-    login: function (name, passphrase) {
-      return authRequest('login', name, passphrase, false);
+    login: function (name, pin) {
+      return authRequest('login', name, pin, false);
     },
 
     /** Create an account. The server provisions a fresh workspace for it, and
      *  we seed it with the sample stack so a first visit matches the design. */
-    register: function (name, passphrase) {
-      return authRequest('register', name, passphrase, true);
+    register: function (name, pin) {
+      return authRequest('register', name, pin, true);
     },
 
     /** Drop the local session. Cached data stays keyed to its own workspace, so

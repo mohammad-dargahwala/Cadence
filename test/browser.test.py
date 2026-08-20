@@ -20,9 +20,9 @@ BASE = f"http://127.0.0.1:{PORT}"
 # The account under test. A login now replaces the old ?w= share link as the
 # way a second device reaches the same workspace.
 USER = "Testerly"
-PASS = "focus-passphrase"
+PASS = "774411"  # 4-8 digit PIN
 NAME_FIELD = "input[placeholder='What should we call you?']"
-PASS_FIELD = "input[placeholder='At least four characters']"
+PASS_FIELD = "input[placeholder='4–8 digit PIN']"
 
 passed, failed = 0, 0
 
@@ -37,14 +37,21 @@ def check(name, cond, detail=""):
         print(f"  FAIL  {name}  {detail}")
 
 
-server = subprocess.Popen(
-    ["node", "server/index.js"],
+# Local D1 emulation needs the schema applied before the Worker can serve
+# anything account-shaped; this is idempotent (CREATE TABLE IF NOT EXISTS).
+subprocess.run(
+    ["npx", "wrangler", "d1", "migrations", "apply", "cadence", "--local"],
     cwd=ROOT,
-    env={"PORT": str(PORT), "PATH": "/usr/bin:/bin:/usr/local/bin", "DATA_DIR": "/tmp/cadence-browser-data"},
+    check=True,
+)
+
+server = subprocess.Popen(
+    ["npx", "wrangler", "dev", "--port", str(PORT), "--ip", "127.0.0.1"],
+    cwd=ROOT,
     stdout=subprocess.DEVNULL,
     stderr=subprocess.PIPE,
 )
-time.sleep(2)
+time.sleep(4)
 
 try:
     with sync_playwright() as pw:
@@ -72,7 +79,7 @@ try:
 
         # Wrong credentials must not open the app.
         page.fill(NAME_FIELD, USER)
-        page.fill(PASS_FIELD, "not-the-passphrase")
+        page.fill(PASS_FIELD, "0000")
         page.get_by_role("button", name="Sign in", exact=True).click()
         page.wait_for_timeout(1200)
         check("unknown account refused", "No account with that name." in page.inner_text("body"))

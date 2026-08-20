@@ -2,17 +2,17 @@
   "name": "cadence-pomodoro",
   "version": "1.0.0",
   "description": "A Pomodoro timer whose focus history persists across reloads, tabs and devices.",
-  "main": "server/index.js",
+  "main": "src/worker.js",
   "scripts": {
-    "start": "node server/index.js",
-    "dev": "node --watch server/index.js",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply cadence --local",
+    "db:migrate:remote": "wrangler d1 migrations apply cadence --remote",
     "test": "node test/analytics.test.js && node test/api.test.js"
   },
   "license": "MIT",
-  "dependencies": {
-    "better-sqlite3": "^13.0.3",
-    "cors": "^2.8.6",
-    "express": "^4.22.2"
+  "devDependencies": {
+    "wrangler": "^4.0.0"
   },
   "engines": {
     "node": ">=18"

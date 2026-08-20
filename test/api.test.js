@@ -1,21 +1,33 @@
 'use strict';
 
+/* End-to-end HTTP tests against the real Worker + local D1 emulation, driven
+ * through `wrangler dev`. No Cloudflare account or network access needed —
+ * `wrangler dev` runs entirely locally (Miniflare) unless given --remote. */
+
 const assert = require('assert');
-const app = require('../server/index.js');
+const crypto = require('crypto');
+const path = require('path');
+const fs = require('fs');
+const os = require('os');
+const { spawn, execFileSync } = require('child_process');
+
+const ROOT = path.join(__dirname, '..');
+const PORT = 8799;
+const BASE = 'http://127.0.0.1:' + PORT;
+const WRANGLER = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 
 let passed = 0;
 const results = [];
-
 function test(name, fn) {
   results.push({ name, fn });
 }
 
-let BASE = '';
-const j = (path, options) =>
-  fetch(BASE + path, Object.assign({ headers: { 'Content-Type': 'application/json' } }, options))
-    .then(async (r) => ({ status: r.status, body: await r.json() }));
+const j = (p, options) =>
+  fetch(BASE + p, Object.assign({ headers: { 'Content-Type': 'application/json' } }, options)).then(
+    async (r) => ({ status: r.status, body: await r.json() })
+  );
 
-const uuid = () => require('crypto').randomUUID();
+const uuid = () => crypto.randomUUID();
 const TODAY = '2026-08-18';
 
 const session = (over) =>
@@ -34,6 +46,27 @@ const session = (over) =>
     over
   );
 
+/** Looks up a user's stored pin_hash straight from the local D1 file, so the
+ *  "never stored in the clear" check doesn't depend on any HTTP surface.
+ *  Goes through a temp --file rather than --command: on Windows, --command
+ *  has to survive a cmd.exe shell hop that mangles quoting. */
+function pinHashFor(nameLower) {
+  const sqlFile = path.join(os.tmpdir(), 'cadence-pinhash-' + crypto.randomUUID() + '.sql');
+  fs.writeFileSync(sqlFile, `SELECT pin_hash FROM users WHERE name_lower = '${nameLower}';`);
+  try {
+    const out = execFileSync(
+      WRANGLER,
+      ['wrangler', 'd1', 'execute', 'cadence', '--local', '--json', '--file', sqlFile],
+      { cwd: ROOT, encoding: 'utf8', shell: process.platform === 'win32' }
+    );
+    const parsed = JSON.parse(out);
+    const rows = parsed[0] && parsed[0].results;
+    return rows && rows[0] ? rows[0].pin_hash : null;
+  } finally {
+    fs.unlinkSync(sqlFile);
+  }
+}
+
 /* ------------------------------------------------------------------ */
 
 test('health check responds', async () => {
@@ -46,7 +79,7 @@ test('registering returns a name and a fresh workspace', async () => {
   const name = 'ada-' + uuid().slice(0, 8);
   const r = await j('/api/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ name, passphrase: 'correcthorse' }),
+    body: JSON.stringify({ name, pin: '1234' }),
   });
   assert.strictEqual(r.status, 201);
   assert.strictEqual(r.body.name, name);
@@ -57,14 +90,12 @@ test('signing in resolves to the same workspace, case-insensitively', async () =
   const name = 'Grace-' + uuid().slice(0, 8);
   const reg = await j('/api/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ name, passphrase: 'hunter22' }),
+    body: JSON.stringify({ name, pin: '774411' }),
   });
 
-  // The whole point of the login: a different device, same credentials, same
-  // workspace — no share link, no re-provisioning.
   const login = await j('/api/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ name: name.toUpperCase(), passphrase: 'hunter22' }),
+    body: JSON.stringify({ name: name.toUpperCase(), pin: '774411' }),
   });
   assert.strictEqual(login.status, 200);
   assert.strictEqual(login.body.workspaceId, reg.body.workspaceId);
@@ -73,71 +104,56 @@ test('signing in resolves to the same workspace, case-insensitively', async () =
 
 test('a taken name is refused regardless of casing', async () => {
   const name = 'Linus-' + uuid().slice(0, 8);
-  await j('/api/auth/register', {
-    method: 'POST',
-    body: JSON.stringify({ name, passphrase: 'firstpass' }),
-  });
+  await j('/api/auth/register', { method: 'POST', body: JSON.stringify({ name, pin: '1111' }) });
   const dup = await j('/api/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ name: name.toLowerCase(), passphrase: 'secondpass' }),
+    body: JSON.stringify({ name: name.toLowerCase(), pin: '2222' }),
   });
   assert.strictEqual(dup.status, 409);
   assert.strictEqual(dup.body.error, 'name_taken');
 });
 
-test('a wrong passphrase and an unknown name are both refused', async () => {
+test('a wrong pin and an unknown name are both refused', async () => {
   const name = 'Alan-' + uuid().slice(0, 8);
-  await j('/api/auth/register', {
-    method: 'POST',
-    body: JSON.stringify({ name, passphrase: 'rightpass' }),
-  });
+  await j('/api/auth/register', { method: 'POST', body: JSON.stringify({ name, pin: '4321' }) });
 
-  const wrong = await j('/api/auth/login', {
-    method: 'POST',
-    body: JSON.stringify({ name, passphrase: 'wrongpass' }),
-  });
+  const wrong = await j('/api/auth/login', { method: 'POST', body: JSON.stringify({ name, pin: '9999' }) });
   assert.strictEqual(wrong.status, 401);
   assert.strictEqual(wrong.body.error, 'bad_credentials');
   assert.ok(!wrong.body.workspaceId, 'a failed login must not leak the workspace');
 
   const missing = await j('/api/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ name: 'nobody-' + uuid().slice(0, 8), passphrase: 'whatever1' }),
+    body: JSON.stringify({ name: 'nobody-' + uuid().slice(0, 8), pin: '1234' }),
   });
   assert.strictEqual(missing.status, 404);
 });
 
-test('registration validates the name and passphrase bounds', async () => {
+test('registration validates the name and pin bounds', async () => {
   const bad = (body) => j('/api/auth/register', { method: 'POST', body: JSON.stringify(body) });
 
-  assert.strictEqual((await bad({ name: '   ', passphrase: 'validpass' })).status, 400);
-  assert.strictEqual((await bad({ passphrase: 'validpass' })).status, 400);
-  assert.strictEqual((await bad({ name: 'x'.repeat(41), passphrase: 'validpass' })).status, 400);
-  assert.strictEqual((await bad({ name: 'Shorty', passphrase: 'abc' })).status, 400);
-  assert.strictEqual((await bad({ name: 'Nopass' })).status, 400);
+  assert.strictEqual((await bad({ name: '   ', pin: '1234' })).status, 400);
+  assert.strictEqual((await bad({ pin: '1234' })).status, 400);
+  assert.strictEqual((await bad({ name: 'x'.repeat(41), pin: '1234' })).status, 400);
+  assert.strictEqual((await bad({ name: 'Shorty', pin: '12' })).status, 400);
+  assert.strictEqual((await bad({ name: 'Lettery', pin: 'abcd' })).status, 400);
+  assert.strictEqual((await bad({ name: 'Nopin' })).status, 400);
 });
 
-test('the passphrase is never stored in the clear', async () => {
+test('the pin is never stored in the clear', async () => {
   const name = 'Vault-' + uuid().slice(0, 8);
-  const secret = 'plaintext-must-not-persist';
-  await j('/api/auth/register', {
-    method: 'POST',
-    body: JSON.stringify({ name, passphrase: secret }),
-  });
+  const secret = '135790';
+  await j('/api/auth/register', { method: 'POST', body: JSON.stringify({ name, pin: secret }) });
 
-  const row = require('../server/db.js').findUserByName(name);
-  assert.ok(row, 'user was written');
-  assert.ok(!row.passphrase.includes(secret), 'stored value must not contain the passphrase');
-  assert.match(row.passphrase, /^[0-9a-f]{32}:[0-9a-f]+$/, 'salt:hash, hex encoded');
+  const stored = pinHashFor(name.toLowerCase());
+  assert.ok(stored, 'user was written');
+  assert.ok(!stored.includes(secret), 'stored value must not contain the pin');
+  assert.match(stored, /^[0-9a-f]{32}:[0-9a-f]+$/, 'salt:hash, hex encoded');
 
-  // Two accounts with the same passphrase must not share a hash — per-user salt.
   const other = 'Vault-' + uuid().slice(0, 8);
-  await j('/api/auth/register', {
-    method: 'POST',
-    body: JSON.stringify({ name: other, passphrase: secret }),
-  });
-  const row2 = require('../server/db.js').findUserByName(other);
-  assert.notStrictEqual(row.passphrase, row2.passphrase, 'salts must differ');
+  await j('/api/auth/register', { method: 'POST', body: JSON.stringify({ name: other, pin: secret }) });
+  const stored2 = pinHashFor(other.toLowerCase());
+  assert.notStrictEqual(stored, stored2, 'salts must differ');
 });
 
 test('workspace creation returns a usable id', async () => {
@@ -235,7 +251,6 @@ test('tasks merge last-write-wins and keep tombstones', async () => {
     body: JSON.stringify({ tasks: [{ id, name: 'Write memo', category: 'DEEP WORK', updatedAt: 1000 }] }),
   });
 
-  // A stale write from a device with an older clock must lose.
   const stale = await j('/api/workspaces/' + ws.id + '/tasks', {
     method: 'PUT',
     body: JSON.stringify({ tasks: [{ id, name: 'STALE', updatedAt: 500 }] }),
@@ -278,7 +293,6 @@ test('two devices sharing a workspace converge; a third stays isolated', async (
   const { body: shared } = await j('/api/workspaces', { method: 'POST', body: '{}' });
   const { body: other } = await j('/api/workspaces', { method: 'POST', body: '{}' });
 
-  // Laptop and phone each log a session against the same workspace id.
   await j('/api/workspaces/' + shared.id + '/sessions', {
     method: 'POST',
     body: JSON.stringify({ sessions: [session({ seconds: 1500, deviceId: 'laptop' })] }),
@@ -310,23 +324,72 @@ test('the app serves the pomodoro page at the root', async () => {
 
 /* ------------------------------------------------------------------ */
 
-(async () => {
-  const server = app.listen(0);
-  await new Promise((r) => server.once('listening', r));
-  BASE = 'http://127.0.0.1:' + server.address().port;
-  console.log('\napi end-to-end');
-
-  for (const { name, fn } of results) {
+async function waitForServer(timeoutMs) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
     try {
-      await fn();
-      passed++;
-      console.log('  ok  ' + name);
-    } catch (err) {
-      console.error('  FAIL  ' + name + '\n        ' + err.message);
-      process.exitCode = 1;
+      const r = await fetch(BASE + '/api/health');
+      if (r.ok) return;
+    } catch {
+      /* not up yet */
+    }
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  }
+  throw new Error('wrangler dev did not become ready in time');
+}
+
+(async () => {
+  const win = process.platform === 'win32';
+
+  console.log('\napplying local D1 schema…');
+  execFileSync(WRANGLER, ['wrangler', 'd1', 'migrations', 'apply', 'cadence', '--local'], {
+    cwd: ROOT,
+    stdio: 'inherit',
+    shell: win,
+  });
+
+  console.log('\nstarting wrangler dev on :' + PORT + ' …');
+  const proc = spawn(WRANGLER, ['wrangler', 'dev', '--port', String(PORT), '--ip', '127.0.0.1'], {
+    cwd: ROOT,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    shell: win,
+  });
+  let log = '';
+  proc.stdout.on('data', (d) => (log += d));
+  proc.stderr.on('data', (d) => (log += d));
+
+  try {
+    await waitForServer(30000);
+    console.log('\napi end-to-end (Worker + local D1)');
+
+    for (const { name, fn } of results) {
+      try {
+        await fn();
+        passed++;
+        console.log('  ok  ' + name);
+      } catch (err) {
+        console.error('  FAIL  ' + name + '\n        ' + err.message);
+        process.exitCode = 1;
+      }
+    }
+
+    console.log('\n' + passed + '/' + results.length + ' api tests passed');
+  } catch (err) {
+    console.error('\n' + err.message);
+    console.error(log.slice(-4000));
+    process.exitCode = 1;
+  } finally {
+    // On Windows, proc is the cmd.exe shell wrapper (spawned with shell:true);
+    // killing it alone leaves the actual wrangler/workerd process tree running.
+    // taskkill /T walks the whole tree instead.
+    if (win) {
+      try {
+        execFileSync('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { stdio: 'ignore' });
+      } catch {
+        /* already gone */
+      }
+    } else {
+      proc.kill();
     }
   }
-
-  console.log('\n' + passed + '/' + results.length + ' api tests passed');
-  server.close();
 })();

@@ -71,8 +71,8 @@ a:hover{color:var(--accent2)}
           </div>
 
           <div style="display:flex;flex-direction:column;gap:9px">
-            <span style="font:400 10px 'IBM Plex Mono',monospace;letter-spacing:.14em;color:var(--fg3)">PASSPHRASE</span>
-            <input type="password" value="{{ authPass }}" onChange="{{ onAuthPass }}" onKeyDown="{{ onAuthKey }}" placeholder="At least four characters" style="height:44px;padding:0 16px;background:var(--pill);border:1px solid var(--card-b);border-radius:13px;color:var(--fg);font:400 13.5px 'Instrument Sans',sans-serif;outline:none" style-focus="border-color:var(--accent)">
+            <span style="font:400 10px 'IBM Plex Mono',monospace;letter-spacing:.14em;color:var(--fg3)">PIN</span>
+            <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" value="{{ authPass }}" onChange="{{ onAuthPass }}" onKeyDown="{{ onAuthKey }}" placeholder="4–8 digit PIN" style="height:44px;padding:0 16px;background:var(--pill);border:1px solid var(--card-b);border-radius:13px;color:var(--fg);font:400 13.5px 'Instrument Sans',sans-serif;outline:none" style-focus="border-color:var(--accent)">
           </div>
 
           <sc-if value="{{ hasAuthError }}" hint-placeholder-val="{{ false }}">
@@ -90,7 +90,7 @@ a:hover{color:var(--accent2)}
           </div>
         </div>
 
-        <span style="font:400 11.5px/1.6 'Instrument Sans',sans-serif;color:var(--fg3);max-width:360px;text-align:center">Sign in with the same name and passphrase on another device to pick up the same focus history.</span>
+        <span style="font:400 11.5px/1.6 'Instrument Sans',sans-serif;color:var(--fg3);max-width:360px;text-align:center">Sign in with the same name and PIN on another device to pick up the same focus history.</span>
       </section>
     </sc-if>
 
@@ -810,7 +810,7 @@ class Component extends DCLogic {
   /* ---------- sign in ---------- */
 
   onAuthName = (e) => this.setState({ authName: e.target.value });
-  onAuthPass = (e) => this.setState({ authPass: e.target.value });
+  onAuthPass = (e) => this.setState({ authPass: e.target.value.replace(/\D/g, '').slice(0, 8) });
   onAuthKey = (e) => { if (e.key === 'Enter') this.submitAuth(); };
 
   toggleAuthMode = () => {
@@ -827,11 +827,11 @@ class Component extends DCLogic {
     // Catch the two obvious cases here so an empty form never costs a round
     // trip; the server validates the same bounds regardless.
     if (!name) return this.setState({ authError: 'Enter a name.' });
-    if (pass.length < 4) return this.setState({ authError: 'Passphrase must be at least 4 characters.' });
+    if (!/^\d{4,8}$/.test(pass)) return this.setState({ authError: 'PIN must be 4–8 digits.' });
 
     (creating ? this.store.register(name, pass) : this.store.login(name, pass)).then(ok => {
       if (!ok) { this.pop(220, .09, 'square', .035); return; }
-      // Never leave the passphrase sitting in component state after it lands.
+      // Never leave the PIN sitting in component state after it lands.
       this.setState({ authName: '', authPass: '', view: 'timer' });
       this.pop(660, .09, 'sine', .05);
       this.toast(creating ? 'Account created' : 'Signed in', name);
@@ -933,7 +933,7 @@ class Component extends DCLogic {
       authPass: s.authPass,
       authTitle: creating ? 'Create an account' : 'Welcome back',
       authBlurb: creating
-        ? 'Pick a name and a passphrase. That pair is the only key to your focus history.'
+        ? 'Pick a name and a PIN. That pair is the only key to your focus history.'
         : 'Sign in to pick up your tasks, settings and focus history.',
       authSubmitLabel: s.authBusy ? 'One moment…' : (creating ? 'Create account' : 'Sign in'),
       authSwitchPrompt: creating ? 'Already have an account?' : 'No account yet?',
