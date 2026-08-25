@@ -33,6 +33,8 @@ a:hover{color:var(--accent2)}
 @keyframes fl2{0%,100%{transform:translate3d(0,0,0) scale(1.1)}50%{transform:translate3d(-70px,50px,0) scale(.9)}}
 @keyframes fl3{0%,100%{transform:translate3d(0,0,0) scale(.95)}50%{transform:translate3d(40px,60px,0) scale(1.2)}}
 @keyframes tin{0%{transform:translateY(28px) scale(.92);opacity:0}60%{transform:translateY(-6px) scale(1.02);opacity:1}100%{transform:translateY(0) scale(1);opacity:1}}
+@keyframes alarmPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.7);opacity:.45}}
+@keyframes alarmIn{0%{transform:scale(.9);opacity:0}100%{transform:scale(1);opacity:1}}
 </style>
 </helmet>
 
@@ -405,6 +407,19 @@ a:hover{color:var(--accent2)}
     </sc-for>
   </div>
 
+  <sc-if value="{{ alarmActive }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;background:rgba(6,7,9,.6);backdrop-filter:blur(8px);z-index:500;display:flex;align-items:center;justify-content:center;animation:tin .3s cubic-bezier(.34,1.4,.5,1)">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:20px;width:340px;padding:40px 36px;background:var(--bg2);border:1px solid var(--card-b);border-radius:24px;box-shadow:0 50px 120px -30px rgba(0,0,0,.65);text-align:center;animation:alarmIn .35s cubic-bezier(.34,1.56,.64,1)">
+        <span style="width:16px;height:16px;border-radius:999px;background:var(--accent);box-shadow:0 0 26px var(--glow);animation:alarmPulse 1s ease-in-out infinite"></span>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <span style="font:600 19px 'Instrument Sans',sans-serif;letter-spacing:-.01em;color:var(--fg)">{{ alarmTitle }}</span>
+          <span style="font:400 13px/1.6 'Instrument Sans',sans-serif;color:var(--fg2)">{{ alarmMsg }}</span>
+        </div>
+        <button data-magnet="1" onClick="{{ stopAlarm }}" style="height:52px;width:100%;border:0;border-radius:16px;background:var(--accent);color:var(--btn-fg);font:600 14.5px 'Instrument Sans',sans-serif;letter-spacing:-.01em;box-shadow:0 16px 34px -12px var(--glow);transition:transform .22s cubic-bezier(.34,1.56,.64,1)" style-hover="transform:translateY(-2px) scale(1.02)" style-active="transform:scale(.93)">Stop alarm</button>
+      </div>
+    </div>
+  </sc-if>
+
 </div>
 
 </x-dc>
@@ -440,7 +455,7 @@ class Component extends DCLogic {
     view: 'timer', theme: 'graphite', mode: 'focus', running: false,
     durations: { focus: 25, short: 5, long: 15 },
     remaining: 25 * 60, round: 1, autoStart: true, sound: true,
-    volume: 0.7, alarmSound: 'chime',
+    volume: 0.7, alarmSound: 'chime', alarmActive: false, alarmTitle: '', alarmMsg: '',
     themeMenuOpen: false, newTask: '', toasts: [],
     tasks: [], analytics: null,
     /* Sign-in screen. `user` null means signed out, which is what gates the
@@ -451,7 +466,7 @@ class Component extends DCLogic {
 
   tabDefs = [ ['timer','Timer'], ['stats','Analytics'], ['tasks','Tasks'], ['settings','Settings'] ];
   modeDefs = [ ['focus','Focus'], ['short','Short break'], ['long','Long break'] ];
-  alarmDefs = [ ['chime','Chime'], ['bell','Bell'], ['digital','Digital'], ['none','None'] ];
+  alarmDefs = [ ['chime','Chime'], ['bell','Classical'], ['digital','Siren'], ['none','None'] ];
 
   TIMER_KEY = 'cadence.timer';
 
@@ -488,6 +503,7 @@ class Component extends DCLogic {
   componentWillUnmount() {
     cancelAnimationFrame(this.raf); cancelAnimationFrame(this.craf);
     clearInterval(this.timer);
+    clearTimeout(this.alarmTimer);
     window.removeEventListener('pointermove', this.onMove);
     window.removeEventListener('pointerdown', this.onDown);
     window.removeEventListener('pointerup', this.onUp);
@@ -670,42 +686,97 @@ class Component extends DCLogic {
   };
 
   /* ---------- audio ---------- */
-  pop(freq, dur, type, gain) {
-    if (!this.state.sound || this.state.volume <= 0) return;
+
+  /* Raw oscillator primitive — no volume math, no sound-toggle check. Both
+   * the quiet UI pops and the loud alarm route through a shared limiter, so
+   * a 100%-volume alarm gets genuinely loud without the raw waveform
+   * clipping into a harsh digital crunch. */
+  playTone(freq, dur, type, peak) {
     try {
-      if (!this.ac) this.ac = new (window.AudioContext || window.webkitAudioContext)();
+      if (!this.ac) {
+        this.ac = new (window.AudioContext || window.webkitAudioContext)();
+        this.limiter = this.ac.createDynamicsCompressor();
+        this.limiter.threshold.setValueAtTime(-8, this.ac.currentTime);
+        this.limiter.knee.setValueAtTime(6, this.ac.currentTime);
+        this.limiter.ratio.setValueAtTime(14, this.ac.currentTime);
+        this.limiter.attack.setValueAtTime(.002, this.ac.currentTime);
+        this.limiter.release.setValueAtTime(.15, this.ac.currentTime);
+        this.limiter.connect(this.ac.destination);
+      }
       const ac = this.ac; if (ac.state === 'suspended') ac.resume();
       const o = ac.createOscillator(), g = ac.createGain();
       o.type = type || 'sine'; o.frequency.value = freq;
-      const peak = (gain == null ? .05 : gain) * this.state.volume;
       g.gain.setValueAtTime(0, ac.currentTime);
       g.gain.linearRampToValueAtTime(peak, ac.currentTime + .008);
       g.gain.exponentialRampToValueAtTime(.0001, ac.currentTime + (dur || .1));
-      o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime + (dur || .1) + .02);
+      o.connect(g); g.connect(this.limiter); o.start(); o.stop(ac.currentTime + (dur || .1) + .02);
     } catch (e) {}
   }
 
-  /* Interval-complete alarm. Distinct from the quiet UI pops so it reads as
-   * "time's up" even from across the room; the pattern is chosen in Settings
-   * and shares the same volume control as everything else. */
-  playAlarm() {
+  /* Quiet, understated UI feedback — clicks and small transitions. Scales
+   * gently with volume so it never becomes obnoxious just from turning the
+   * alarm up. */
+  pop(freq, dur, type, gain) {
+    if (!this.state.sound || this.state.volume <= 0) return;
+    const peak = (gain == null ? .05 : gain) * (0.25 + this.state.volume * 1.25);
+    this.playTone(freq, dur, type, peak);
+  }
+
+  /* The alarm itself is deliberately louder and scales much harder with the
+   * volume slider — 100% is meant to read as genuinely loud, not a slightly
+   * louder chime. */
+  alarmTone(freq, dur, type, gain) {
+    if (!this.state.sound || this.state.volume <= 0) return;
+    const peak = (gain == null ? .3 : gain) * (0.18 + this.state.volume * 4.9);
+    this.playTone(freq, dur, type, peak);
+  }
+
+  /* One repetition of the chosen alarm's phrase. Three distinct characters:
+   * a mild, floating chime; a mellow classical-style arpeggio; and a jolting,
+   * blaring siren for when "loud" needs to mean loud. */
+  playAlarmOnce = () => {
     switch (this.state.alarmSound) {
       case 'none': return;
-      case 'bell':
-        this.pop(880, .5, 'sine', .09);
-        setTimeout(() => this.pop(1320, .6, 'sine', .07), 90);
-        setTimeout(() => this.pop(660, .8, 'sine', .05), 240);
+      case 'bell': // classical — a slow, mellow four-note arpeggio
+        this.alarmTone(523.25, .55, 'triangle', .3);
+        setTimeout(() => this.alarmTone(659.25, .55, 'triangle', .28), 260);
+        setTimeout(() => this.alarmTone(783.99, .6, 'triangle', .28), 520);
+        setTimeout(() => this.alarmTone(1046.5, .95, 'triangle', .32), 800);
         return;
-      case 'digital':
-        this.pop(1180, .09, 'square', .06);
-        setTimeout(() => this.pop(1180, .09, 'square', .06), 150);
-        setTimeout(() => this.pop(1180, .16, 'square', .06), 300);
+      case 'digital': // siren — fast, jolting alarm-clock beeps
+        this.alarmTone(1200, .12, 'square', .36);
+        setTimeout(() => this.alarmTone(1200, .12, 'square', .36), 160);
+        setTimeout(() => this.alarmTone(1200, .16, 'square', .38), 320);
+        setTimeout(() => this.alarmTone(1200, .2, 'square', .4), 480);
         return;
-      default:
-        this.pop(660, .18, 'sine', .07);
-        setTimeout(() => this.pop(990, .3, 'sine', .06), 130);
+      default: // chime — soft, mild, unhurried
+        this.alarmTone(660, .4, 'sine', .24);
+        setTimeout(() => this.alarmTone(880, .55, 'sine', .2), 240);
     }
+  };
+
+  /* Gap between repetitions of each phrase — short and frequent for the
+   * jolting siren, long and unhurried for the mild chime. */
+  ALARM_GAP = { chime: 1700, bell: 2600, digital: 900 };
+
+  /* Keeps sounding the chosen alarm on a loop until `stopAlarm` is called —
+   * intentionally: a single chime is easy to miss, so the alarm now behaves
+   * like one, and the popup is the one way to silence it. */
+  startAlarm() {
+    if (this.alarmTimer || this.state.alarmSound === 'none') return;
+    this.setState({ alarmActive: true });
+    const tick = () => {
+      this.playAlarmOnce();
+      this.alarmTimer = setTimeout(tick, this.ALARM_GAP[this.state.alarmSound] || 1700);
+    };
+    tick();
   }
+
+  stopAlarm = () => {
+    clearTimeout(this.alarmTimer);
+    this.alarmTimer = null;
+    if (this.state.alarmActive) this.setState({ alarmActive: false });
+  };
 
   /* ---------- toasts ---------- */
   toast(title, msg) {
@@ -738,6 +809,7 @@ class Component extends DCLogic {
   }
 
   toggleRun = () => {
+    this.stopAlarm();
     const next = !this.state.running;
     this.pop(next ? 440 : 300, .1, 'sine', .06);
     if (next && this.state.remaining === this.total()) this.intervalStartedAt = Date.now();
@@ -746,6 +818,7 @@ class Component extends DCLogic {
   };
 
   reset = () => {
+    this.stopAlarm();
     this.setRunning(false);
     this.intervalStartedAt = Date.now();
     this.setState({ remaining: this.total() }, () => this.saveTimer());
@@ -753,12 +826,13 @@ class Component extends DCLogic {
     this.toast('Timer reset', this.modeName(this.state.mode));
   };
 
-  skip = () => { this.complete(true); };
+  skip = () => { this.stopAlarm(); this.complete(true); };
 
   /* Distinct from `reset`, which only rewinds the interval currently in
    * view: this drops the whole cycle back to round 1 / Focus, for when a
    * session is being abandoned rather than just paused. */
   resetAll = () => {
+    this.stopAlarm();
     this.setRunning(false);
     this.intervalStartedAt = Date.now();
     this.setState({ mode: 'focus', round: 1, remaining: this.state.durations.focus * 60 }, () => this.saveTimer());
@@ -806,12 +880,20 @@ class Component extends DCLogic {
     this.deadline = run ? Date.now() + s.durations[mode] * 60 * 1000 : 0;
     this.setState({ mode, round, remaining: s.durations[mode] * 60, running: run }, () => this.saveTimer());
     if (run) this.timer = setInterval(this.tick, 500);
-    if (!skipped) this.playAlarm(); else this.pop(380, .08, 'triangle', .04);
-    this.toast(skipped ? 'Interval skipped' : (s.mode === 'focus' ? 'Focus block done' : 'Break over'), 'Now: ' + this.modeName(mode) + ' · ' + s.durations[mode] + ' min');
+    const headline = s.mode === 'focus' ? 'Focus block done' : 'Break over';
+    const detail = 'Now: ' + this.modeName(mode) + ' · ' + s.durations[mode] + ' min';
+    if (!skipped) {
+      this.setState({ alarmTitle: headline, alarmMsg: detail });
+      this.startAlarm();
+    } else {
+      this.pop(380, .08, 'triangle', .04);
+    }
+    this.toast(skipped ? 'Interval skipped' : headline, detail);
   }
 
   setMode = (m) => () => {
     if (m === this.state.mode) return;
+    this.stopAlarm();
     clearInterval(this.timer);
     this.deadline = 0;
     this.intervalStartedAt = Date.now();
@@ -893,9 +975,9 @@ class Component extends DCLogic {
   };
 
   setAlarmSound = (id) => () => {
-    this.setState({ alarmSound: id }, () => { this.persistSettings(); this.playAlarm(); });
+    this.setState({ alarmSound: id }, () => { this.persistSettings(); this.playAlarmOnce(); });
   };
-  previewAlarm = () => this.playAlarm();
+  previewAlarm = () => this.playAlarmOnce();
 
   /* ---------- sign in ---------- */
 
@@ -930,6 +1012,7 @@ class Component extends DCLogic {
 
   signOut = () => {
     if (!this.store) return;
+    this.stopAlarm();
     this.setRunning(false);
     this.store.logout();
     this.setState({ view: 'timer', authMode: 'login', authName: '', authPass: '', authError: null });
@@ -1112,7 +1195,9 @@ class Component extends DCLogic {
         return { id, label, bg: on ? th.pill : 'transparent', c: on ? th.fg : th.fg3, b: on ? th.accent : th.cardB, go: this.setAlarmSound(id) };
       }),
       toggleThemeMenu: this.toggleThemeMenu,
-      toasts: s.toasts
+      toasts: s.toasts,
+
+      alarmActive: s.alarmActive, alarmTitle: s.alarmTitle, alarmMsg: s.alarmMsg, stopAlarm: this.stopAlarm
     };
   }
 }
