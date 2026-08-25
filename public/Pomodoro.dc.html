@@ -2,6 +2,8 @@
 <html>
 <head>
 <meta charset="utf-8">
+<title>Pomodoro Timer</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="./vendor-map.js"></script>
 <script src="./support.js"></script>
@@ -163,6 +165,7 @@ a:hover{color:var(--accent2)}
           <button data-magnet="1" onClick="{{ toggleRun }}" style="height:52px;min-width:158px;padding:0 34px;border:0;border-radius:16px;background:var(--accent);color:var(--btn-fg);font:600 14.5px 'Instrument Sans',sans-serif;letter-spacing:-.01em;box-shadow:0 16px 34px -12px var(--glow);transition:transform .22s cubic-bezier(.34,1.56,.64,1),box-shadow .3s" style-hover="transform:translateY(-2px) scale(1.02)" style-active="transform:scale(.93)">{{ runLabel }}</button>
           <button data-magnet="1" onClick="{{ reset }}" style="height:52px;padding:0 22px;border:1px solid var(--card-b);border-radius:16px;background:var(--card);color:var(--fg2);font:500 13.5px 'Instrument Sans',sans-serif;transition:transform .22s cubic-bezier(.34,1.56,.64,1),color .25s" style-hover="color:var(--fg)" style-active="transform:scale(.93)">Reset</button>
           <button data-magnet="1" onClick="{{ skip }}" style="height:52px;padding:0 22px;border:1px solid var(--card-b);border-radius:16px;background:var(--card);color:var(--fg2);font:500 13.5px 'Instrument Sans',sans-serif;transition:transform .22s cubic-bezier(.34,1.56,.64,1),color .25s" style-hover="color:var(--fg)" style-active="transform:scale(.93)">Skip</button>
+          <button data-magnet="1" onClick="{{ resetAll }}" style="height:52px;padding:0 22px;border:1px solid var(--card-b);border-radius:16px;background:transparent;color:var(--fg3);font:500 13.5px 'Instrument Sans',sans-serif;transition:transform .22s cubic-bezier(.34,1.56,.64,1),color .25s" style-hover="color:var(--fg2)" style-active="transform:scale(.93)">Reset all</button>
         </div>
 
         <sc-if value="{{ hasActive }}" hint-placeholder-val="{{ true }}">
@@ -334,6 +337,30 @@ a:hover{color:var(--accent2)}
               </button>
             </div>
           </div>
+
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:baseline;justify-content:space-between">
+              <span style="font:500 13px 'Instrument Sans',sans-serif;color:var(--fg2)">Volume</span>
+              <span style="font:500 13px 'IBM Plex Mono',monospace;color:var(--fg)">{{ volumePct }}%</span>
+            </div>
+            <div data-magnet="1" onPointerDown="{{ dragVolume }}" style="position:relative;height:30px;display:flex;align-items:center">
+              <div style="position:absolute;left:0;right:0;height:6px;border-radius:999px;background:var(--pill)"></div>
+              <div style="position:absolute;left:0;height:6px;width:{{ volumePct }}%;border-radius:999px;background:var(--accent)"></div>
+              <div style="position:absolute;left:{{ volumePct }}%;width:20px;height:20px;margin-left:-10px;border-radius:999px;background:var(--fg);box-shadow:0 4px 14px rgba(0,0,0,.35)"></div>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:baseline;justify-content:space-between">
+              <span style="font:500 13px 'Instrument Sans',sans-serif;color:var(--fg2)">Alarm sound</span>
+              <button data-magnet="1" onClick="{{ previewAlarm }}" style="padding:0;border:0;background:transparent;color:var(--accent);font:500 11.5px 'Instrument Sans',sans-serif" style-hover="color:var(--accent2)">Preview</button>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <sc-for list="{{ alarmSounds }}" as="al" hint-placeholder-count="4">
+                <button data-magnet="1" onClick="{{ al.go }}" style="height:34px;padding:0 16px;border:1px solid {{ al.b }};border-radius:11px;background:{{ al.bg }};color:{{ al.c }};font:500 12.5px 'Instrument Sans',sans-serif;transition:all .25s cubic-bezier(.34,1.56,.64,1)" style-active="transform:scale(.94)">{{ al.label }}</button>
+              </sc-for>
+            </div>
+          </div>
         </div>
 
         <div style="display:flex;flex-direction:column;gap:18px;padding:26px;background:var(--card);border:1px solid var(--card-b);border-radius:18px;backdrop-filter:blur(20px)">
@@ -413,6 +440,7 @@ class Component extends DCLogic {
     view: 'timer', theme: 'graphite', mode: 'focus', running: false,
     durations: { focus: 25, short: 5, long: 15 },
     remaining: 25 * 60, round: 1, autoStart: true, sound: true,
+    volume: 0.7, alarmSound: 'chime',
     themeMenuOpen: false, newTask: '', toasts: [],
     tasks: [], analytics: null,
     /* Sign-in screen. `user` null means signed out, which is what gates the
@@ -423,6 +451,7 @@ class Component extends DCLogic {
 
   tabDefs = [ ['timer','Timer'], ['stats','Analytics'], ['tasks','Tasks'], ['settings','Settings'] ];
   modeDefs = [ ['focus','Focus'], ['short','Short break'], ['long','Long break'] ];
+  alarmDefs = [ ['chime','Chime'], ['bell','Bell'], ['digital','Digital'], ['none','None'] ];
 
   TIMER_KEY = 'cadence.timer';
 
@@ -495,6 +524,8 @@ class Component extends DCLogic {
     }
     if (typeof cfg.autoStart === 'boolean') patch.autoStart = cfg.autoStart;
     if (typeof cfg.sound === 'boolean') patch.sound = cfg.sound;
+    if (typeof cfg.volume === 'number' && !this.dragging) patch.volume = Math.max(0, Math.min(1, cfg.volume));
+    if (cfg.alarmSound && this.alarmDefs.some(([id]) => id === cfg.alarmSound)) patch.alarmSound = cfg.alarmSound;
     if (cfg.theme && this.themes[cfg.theme] && cfg.theme !== this.state.theme) {
       patch.theme = cfg.theme;
       this.applyTheme(cfg.theme);
@@ -506,7 +537,8 @@ class Component extends DCLogic {
     if (!this.store) return;
     const s = this.state;
     this.store.saveSettings({
-      durations: s.durations, autoStart: s.autoStart, sound: s.sound, theme: s.theme
+      durations: s.durations, autoStart: s.autoStart, sound: s.sound, theme: s.theme,
+      volume: s.volume, alarmSound: s.alarmSound
     });
   }
 
@@ -639,19 +671,41 @@ class Component extends DCLogic {
 
   /* ---------- audio ---------- */
   pop(freq, dur, type, gain) {
-    if (!this.state.sound) return;
+    if (!this.state.sound || this.state.volume <= 0) return;
     try {
       if (!this.ac) this.ac = new (window.AudioContext || window.webkitAudioContext)();
       const ac = this.ac; if (ac.state === 'suspended') ac.resume();
       const o = ac.createOscillator(), g = ac.createGain();
       o.type = type || 'sine'; o.frequency.value = freq;
+      const peak = (gain == null ? .05 : gain) * this.state.volume;
       g.gain.setValueAtTime(0, ac.currentTime);
-      g.gain.linearRampToValueAtTime(gain == null ? .05 : gain, ac.currentTime + .008);
+      g.gain.linearRampToValueAtTime(peak, ac.currentTime + .008);
       g.gain.exponentialRampToValueAtTime(.0001, ac.currentTime + (dur || .1));
       o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime + (dur || .1) + .02);
     } catch (e) {}
   }
-  chime() { this.pop(660, .18, 'sine', .07); setTimeout(() => this.pop(990, .3, 'sine', .06), 130); }
+
+  /* Interval-complete alarm. Distinct from the quiet UI pops so it reads as
+   * "time's up" even from across the room; the pattern is chosen in Settings
+   * and shares the same volume control as everything else. */
+  playAlarm() {
+    switch (this.state.alarmSound) {
+      case 'none': return;
+      case 'bell':
+        this.pop(880, .5, 'sine', .09);
+        setTimeout(() => this.pop(1320, .6, 'sine', .07), 90);
+        setTimeout(() => this.pop(660, .8, 'sine', .05), 240);
+        return;
+      case 'digital':
+        this.pop(1180, .09, 'square', .06);
+        setTimeout(() => this.pop(1180, .09, 'square', .06), 150);
+        setTimeout(() => this.pop(1180, .16, 'square', .06), 300);
+        return;
+      default:
+        this.pop(660, .18, 'sine', .07);
+        setTimeout(() => this.pop(990, .3, 'sine', .06), 130);
+    }
+  }
 
   /* ---------- toasts ---------- */
   toast(title, msg) {
@@ -700,6 +754,18 @@ class Component extends DCLogic {
   };
 
   skip = () => { this.complete(true); };
+
+  /* Distinct from `reset`, which only rewinds the interval currently in
+   * view: this drops the whole cycle back to round 1 / Focus, for when a
+   * session is being abandoned rather than just paused. */
+  resetAll = () => {
+    this.setRunning(false);
+    this.intervalStartedAt = Date.now();
+    this.setState({ mode: 'focus', round: 1, remaining: this.state.durations.focus * 60 }, () => this.saveTimer());
+    this.pop(200, .14, 'square', .05);
+    this.toast('Timer reset', 'Back to round 1 · Focus');
+  };
+
   modeName(m) { return m === 'focus' ? 'Focus' : m === 'short' ? 'Short break' : 'Long break'; }
 
   activeTask() { return this.state.tasks.find(t => t.pinned) || null; }
@@ -740,7 +806,7 @@ class Component extends DCLogic {
     this.deadline = run ? Date.now() + s.durations[mode] * 60 * 1000 : 0;
     this.setState({ mode, round, remaining: s.durations[mode] * 60, running: run }, () => this.saveTimer());
     if (run) this.timer = setInterval(this.tick, 500);
-    if (!skipped) this.chime(); else this.pop(380, .08, 'triangle', .04);
+    if (!skipped) this.playAlarm(); else this.pop(380, .08, 'triangle', .04);
     this.toast(skipped ? 'Interval skipped' : (s.mode === 'focus' ? 'Focus block done' : 'Break over'), 'Now: ' + this.modeName(mode) + ' · ' + s.durations[mode] + ' min');
   }
 
@@ -806,6 +872,30 @@ class Component extends DCLogic {
     this.setState({ sound: v }, () => { this.persistSettings(); if (v) this.pop(740, .09, 'sine', .05); });
     this.toast('Audio feedback', v ? 'On' : 'Off');
   };
+
+  dragVolume = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    this.dragging = true;
+    const move = (ev) => {
+      const p = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
+      const v = Math.round(p * 100) / 100;
+      if (v === this.state.volume) return;
+      this.setState({ volume: v });
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
+      this.dragging = false;
+      this.persistSettings();
+      this.pop(500, .06, 'sine', .06);
+    };
+    move(e);
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+  };
+
+  setAlarmSound = (id) => () => {
+    this.setState({ alarmSound: id }, () => { this.persistSettings(); this.playAlarm(); });
+  };
+  previewAlarm = () => this.playAlarm();
 
   /* ---------- sign in ---------- */
 
@@ -964,7 +1054,7 @@ class Component extends DCLogic {
       timeText: (mm < 10 ? '0' + mm : '' + mm) + ':' + (ss < 10 ? '0' + ss : '' + ss),
       statusText: s.running ? 'in progress' : (s.remaining === this.total() ? 'ready when you are' : 'paused'),
       runLabel: s.running ? 'Pause' : (s.remaining === this.total() ? 'Start focus' : 'Resume'),
-      toggleRun: this.toggleRun, reset: this.reset, skip: this.skip,
+      toggleRun: this.toggleRun, reset: this.reset, skip: this.skip, resetAll: this.resetAll,
       dots: [1, 2, 3, 4].map(n => ({
         w: n === s.round ? 26 : 8,
         bg: n === s.round ? th.accent : (n < s.round ? th.fg3 : th.pill)
@@ -1015,6 +1105,12 @@ class Component extends DCLogic {
       autoBg: s.autoStart ? th.accent : th.pill, autoX: s.autoStart ? 25 : 3, autoKnob: s.autoStart ? th.btnFg : th.fg2,
       soundBg: s.sound ? th.accent : th.pill, soundX: s.sound ? 25 : 3, soundKnob: s.sound ? th.btnFg : th.fg2,
       toggleAuto: this.toggleAuto, toggleSound: this.toggleSound,
+      volumePct: Math.round(s.volume * 100), dragVolume: this.dragVolume,
+      previewAlarm: this.previewAlarm,
+      alarmSounds: this.alarmDefs.map(([id, label]) => {
+        const on = id === s.alarmSound;
+        return { id, label, bg: on ? th.pill : 'transparent', c: on ? th.fg : th.fg3, b: on ? th.accent : th.cardB, go: this.setAlarmSound(id) };
+      }),
       toggleThemeMenu: this.toggleThemeMenu,
       toasts: s.toasts
     };

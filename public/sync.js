@@ -98,6 +98,8 @@
     durations: { focus: 25, short: 5, long: 15 },
     autoStart: true,
     sound: true,
+    volume: 0.7,
+    alarmSound: 'chime',
     theme: 'graphite',
     updatedAt: 0,
   };

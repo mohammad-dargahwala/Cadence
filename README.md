@@ -136,6 +136,7 @@ public/
   analytics-core.js  aggregation, shared verbatim with the Worker
   vendor-map.js      points the runtime at locally hosted React
   support.js         Claude Design runtime (unmodified)
+  favicon.svg        browser tab icon
   vendor/            React 18.3.1 UMD builds
 test/
   analytics.test.js  aggregation edge cases
@@ -171,6 +172,20 @@ for the zone you want (see [Custom Domains](https://developers.cloudflare.com/wo
 There's no in-process rate limit here — Workers isolates don't share memory
 across instances, so that kind of counter doesn't work reliably in this model.
 Cloudflare's platform-level protections sit in front instead.
+
+## Changelog
+
+**2026-08-25**
+- Page title set to "Pomodoro Timer" and a custom favicon added (previously the
+  Worker returned a bare `204` for `/favicon.ico` with no icon at all).
+- **Reset all**: a new button beside Reset/Skip that drops the whole cycle back
+  to Round 1 / Focus, distinct from Reset, which only rewinds the interval
+  currently in view.
+- **Alarm sounds**: the completion chime is now one of four selectable
+  patterns (Chime, Bell, Digital, None), with a Preview button in Settings.
+- **Volume slider**: a single 0–100% control scales every synthesized sound —
+  UI pops and the completion alarm alike. Both settings sync and persist the
+  same way durations and theme already did.
 
 ## License
 
