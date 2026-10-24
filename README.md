@@ -1,35 +1,32 @@
 # Cadence
 
-A Pomodoro timer with tasks, focus history, and a name-and-PIN login.
+Cadence is a Pomodoro timer with a task list and a record of your focus sessions. Pick a task, start a focus block, and check Analytics to see your focus time for the day.
 
-[Open Cadence](https://cadence.mdargahwala.tech)
+[Use Cadence](https://cadence.mdargahwala.tech)
 
-## Using it
+## The timer
 
-Create an account with a name and a 4–8 digit PIN. Sign in with the same details on another device to load your saved tasks, settings, and session history. New accounts start with four sample tasks that you can remove.
+The default cycle is 25 minutes of focus, then a 5-minute break. After four focus rounds, the break lasts 15 minutes. You can change all three durations in Settings, along with the theme, volume, alarm sound, and whether the next interval starts automatically.
 
-The timer starts with 25-minute focus blocks, 5-minute short breaks, and a 15-minute long break after four focus rounds. You can change those durations in Settings.
+Pin a task to show it on the timer. Tasks can be added, completed, or deleted. New accounts come with four sample tasks; they're just examples and can be removed.
 
-- Add tasks, mark them done, or pin one as the current focus target.
-- Pause, reset the current interval, skip ahead, or use **Reset all** to return to round one.
-- Check daily focus time, session counts, streaks, weekly totals, and time by task category.
-- Choose a theme, adjust the volume, or select Chime, Classical, Siren, or None for the completion alarm.
+**Reset** restarts the current interval. **Reset all** returns to round one. **Skip** moves to the next interval and records the time already spent. Resetting does not save that interval to your history.
 
-An interval is logged when it finishes or is skipped. Focus intervals with at least 60 seconds recorded count toward analytics; breaks do not. Resetting an interval does not log it.
+Analytics count focus intervals with at least a minute recorded, including ones ended with Skip. Breaks are saved but left out of focus totals. The Analytics tab shows daily time, session counts, streaks, weekly totals, and a category breakdown.
 
-## What gets saved
+## Accounts and saving
 
-The browser keeps a local copy of account data and queues changes for the Worker to save in Cloudflare D1. Tabs exchange updates through `BroadcastChannel`, with a storage-event fallback. Other devices pick up changes through HTTP sync, including a periodic sync every minute.
+Choose a name and a 4–8 digit PIN when you register. The same login on another device brings back your tasks, settings, and saved sessions.
 
-Session records use unique IDs so retrying the same upload does not add the same record twice. Task edits and settings use timestamps to resolve competing changes.
+The countdown itself stays in the browser where you started it. Starting a timer on your phone won't start one on your laptop. A saved deadline lets the same browser recover the remaining time after a reload.
 
-The running countdown is saved separately in the current browser. It uses a deadline to recover the remaining time after a reload. **The active countdown does not sync between devices.**
+The page saves account data in localStorage before sending changes to a Cloudflare Worker and D1 database. It retries failed writes, shares updates between tabs, and checks for changes from other devices every minute. Duplicate session uploads are ignored by ID; competing task and settings edits are resolved by timestamps.
 
-An already loaded page can keep working with cached account data during a connection failure and retry pending writes later. Registration, login, and syncing need a connection. There is no service worker for guaranteed offline page loading. Clearing browser storage before pending changes sync can lose those changes.
+You can keep using an already loaded page during a connection failure. Signing in and syncing still need the network. There is no service worker, so loading the page from scratch offline is not guaranteed. Unsynced changes can be lost if you clear browser storage.
 
-## Run locally
+## Local setup
 
-Use Node.js and npm supported by the installed version of [Wrangler](https://developers.cloudflare.com/workers/wrangler/install-and-update/).
+Install Node.js and npm compatible with [Wrangler](https://developers.cloudflare.com/workers/wrangler/install-and-update/), then run:
 
 ```sh
 npm ci
@@ -37,51 +34,28 @@ npm run db:migrate:local
 npm run dev
 ```
 
-Open the local URL Wrangler prints, normally `http://localhost:8787`. Local development uses a separate D1 database; create a test account there.
+Open the URL printed by Wrangler, normally `http://localhost:8787`. This uses a local D1 database with its own accounts.
 
-```sh
-npm test
-```
+`npm test` runs the analytics and local Worker API tests. The Python browser checks in `test/browser.test.py` need Playwright and a Chrome executable and are not part of that command.
 
-This runs the analytics tests and API tests. The API tests start a local Worker and apply the local database migrations. The Python browser checks in `test/browser.test.py` are separate from `npm test` and require Playwright and a configured Chrome executable.
+## Hosting a copy
 
-## Deploy your own copy
+The repository's `wrangler.toml` contains the existing site's domain and database ID. Replace those with your own before deploying.
 
-The checked-in `wrangler.toml` points to this project's database and custom domain. For a separate installation:
-
-1. Sign in to your Cloudflare account with `npx wrangler login`.
-2. Create a D1 database with `npx wrangler d1 create cadence`, or choose an existing one.
-3. Set the `DB` binding's `database_id` and `database_name` in `wrangler.toml` to your database. Keep `migrations_dir = "migrations"`. The npm migration scripts use the name `cadence`; update them if you choose another name.
-4. Replace the custom domain in `[[routes]]` with yours, or remove that block to use a Workers subdomain.
-5. Apply the remote schema and deploy:
+Sign in with `npx wrangler login`, then create a database with `npx wrangler d1 create cadence`. Set its ID in the `DB` binding, keeping the database name `cadence` and the `migrations/` directory. Replace the custom domain in `[[routes]]`, or remove that block to use a Workers subdomain.
 
 ```sh
 npm run db:migrate:remote
 npm run deploy
 ```
 
-The Worker serves the frontend from `public/` and handles the API. D1 holds accounts, workspaces, sessions, tasks, and settings.
+The frontend is in `public/Pomodoro.dc.html`. `public/sync.js` handles saving, `public/analytics-core.js` calculates the statistics, and `src/` contains the API, D1 queries, and login code. React 18 is served locally; fonts come from Google Fonts.
 
-## Code
+## Current limitations
 
-| Path | Purpose |
-| --- | --- |
-| `public/Pomodoro.dc.html` | Timer, tasks, analytics, settings, and login UI |
-| `public/sync.js` | Browser cache, pending writes, and synchronization |
-| `public/analytics-core.js` | Analytics calculations shared with the Worker |
-| `src/worker.js` | HTTP routes and input validation |
-| `src/db.js` | D1 queries |
-| `src/auth.js` | Name and PIN validation and hashing |
-| `migrations/` | Database schema |
-| `test/` | Analytics, API, and browser checks |
+The PIN is hashed with salted SHA-256. After login, the workspace ID acts as the API credential: anyone who has it can read and change that workspace. There is no login rate limit, account recovery, or server-side revocation on logout. Avoid storing sensitive information in this account model.
 
-The frontend uses locally hosted React 18 builds and the included design runtime. Fonts load from Google Fonts.
-
-## Access and limits
-
-PINs are stored as salted SHA-256 hashes. After login, the browser receives a workspace ID; possession of that ID grants read and write access to that workspace's API. The code has no login rate limiting, account recovery, or server-side logout that revokes a workspace ID. This account model is intended for a personal project, not sensitive data.
-
-The state API currently returns at most 5,000 session records without pagination. Server analytics query focus history separately, so an older history missing from the browser's cache can make its local totals differ from the server's. Reading the full event history needs pagination.
+The state API returns up to 5,000 sessions without pagination. Server analytics query focus history separately, so browser totals can differ when older sessions are missing from its cache.
 
 ## License
 
