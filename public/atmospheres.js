@@ -21,7 +21,7 @@
   }
   function blossomTree(c,w,h) {
     const random=rng(76429), scale=Math.min(w*.00082,h*.00112), tips=[];
-    c.save();c.translate(w<700?w*.02:w*.13,h*.99);c.scale(scale,scale);
+    c.save();c.translate(w<700?w*.02:w*.13,h*.99);c.scale(scale,h*.00105);
     glow(c,60,-610,510,'#e69db247');glow(c,-170,-480,260,'#cf83a73a');
     function branch(x,y,len,angle,width,depth) {
       const ex=x+Math.cos(angle)*len,ey=y+Math.sin(angle)*len;
