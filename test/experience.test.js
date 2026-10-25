@@ -9,6 +9,7 @@ const source = fs.readFileSync(path.join(__dirname,'../public/experience.js'),'u
 const flush = async () => { for(let i=0;i<12;i++) await new Promise(setImmediate); };
 function harness(transport='web',reduceMotion=false) {
   let now=1000000, sequence=0, pendingPlay, nativePlaying=false, helperUp=true;
+  let nativeTrack={title:'Native test song',artist:'Artist',album:'Album one',artwork:'',trackKey:'a'.repeat(64)},likeSupported=true;
   const callbacks=new Map(), intervals=new Map(), requests=[], listeners={}, data=new Map();
   const state={workspaceId:'account-a',user:'Tester',settings:{experience:{musicMode:'full',musicSource:transport}}};
   if(transport==='desktop') data.set('cadence.desktop.pair',JSON.stringify({owner:'account-a',key:'q'.repeat(32),clientId:'a'.repeat(32)}));
@@ -37,7 +38,8 @@ function harness(transport='web',reduceMotion=false) {
         if(url.endsWith('/timer')) nativePlaying=body.allowed && body.deadline>now;
         if(url.endsWith('/command') && body.action==='pause')nativePlaying=false;
         if(url.endsWith('/command') && body.action==='play')nativePlaying=true;
-        return {status:200,ok:true,json:async()=>({connected:true,available:true,playing:nativePlaying,title:'Native test song',artist:'Artist',positionMs:20000,durationMs:180000,controls:{play:true,pause:true,seek:false,next:false,previous:true}})};
+        if(url.endsWith('/like'))return {status:200,ok:true,json:async()=>({ok:true,message:'Like / unlike shortcut sent to Spotify.'})};
+        return {status:200,ok:true,json:async()=>({connected:true,available:true,playing:nativePlaying,...nativeTrack,positionMs:20000,durationMs:180000,controls:{play:true,pause:true,seek:false,next:false,previous:true,like:likeSupported}})};
       }
       if(url.endsWith('/play') && pendingPlay) { const p=pendingPlay; pendingPlay=null; await p; }
       return {status:204,ok:true,headers:{get(){return null;}}};
@@ -49,6 +51,9 @@ function harness(transport='web',reduceMotion=false) {
     timer(next){context.window.CadenceExperience.timer({signedIn:true,running:true,mode:'focus',remaining:60,deadline:now+60000,view:'timer',alarm:false,...next});},
     setNow(v){now=v;},now:()=>now,
     setNativePlaying(v){nativePlaying=v;},
+    setNativeTrack(v){nativeTrack={...nativeTrack,...v};},
+    setLikeSupported(v){likeSupported=v;},
+    runIntervals(){[...intervals.values()].forEach(fn=>fn());},
     setHelperUp(v){helperUp=v;},
     visibility(){listeners.visibilitychange();},
     holdPlay(){return new Promise(resolve=>{let release;pendingPlay=new Promise(r=>release=r);resolve(release);});}
@@ -101,6 +106,19 @@ function harness(transport='web',reduceMotion=false) {
   boundary.setNow(boundary.now()+60000);boundary.setNativePlaying(false);boundary.visibility();await flush();
   assert(boundary.context.window.CadenceExperience.musicWasPlaying(),'alarm remembers playback before the native deadline pause');
   boundary.timer({mode:'short',running:false,deadline:0});await flush();assert.equal(boundary.context.window.CadenceExperience.musicWasPlaying(),false,'break state does not retain stale focus playback');
+  const metadata=harness('desktop');await flush();assert.equal(metadata.intervals.size,0,'pairing can finish before the timer is signed in');
+  metadata.timer({running:false});await flush();assert.equal(metadata.intervals.size,2,'sign-in starts metadata polling and heartbeats');
+  const pollIds=[...metadata.intervals.keys()].join(',');for(let i=0;i<5;i++)metadata.store.subscriber(metadata.state);
+  assert.equal([...metadata.intervals.keys()].join(','),pollIds,'routine store emissions do not restart and starve metadata polling');
+  metadata.setNativeTrack({title:'Next song',artist:'Next artist',album:'Album two',artwork:'data:image/png;base64,AA==',trackKey:'b'.repeat(64)});metadata.setNow(metadata.now()+2000);metadata.runIntervals();await flush();
+  const metadataPlayer=metadata.body.children[0];assert.equal(metadataPlayer.querySelector('.music-title').textContent,'Next song');assert.equal(metadataPlayer.querySelector('.music-artist').textContent,'Next artist');assert.equal(metadataPlayer.querySelector('img').src,'data:image/png;base64,AA==','art follows the new track');
+  metadata.setNativeTrack({title:'Third song',artist:'Third artist',artwork:'data:image/png;base64,AQ==',trackKey:'c'.repeat(64)});metadata.setNow(metadata.now()+2000);metadata.runIntervals();await flush();assert.equal(metadataPlayer.querySelector('.music-title').textContent,'Third song','automatic changes keep refreshing beyond the first transition');
+  const likeButton=metadataPlayer.querySelector('.music-controls').children.find(b=>b.dataset.action==='like'),beforeLike=metadata.requests.length;
+  assert.equal(likeButton.disabled,false);likeButton.onclick();likeButton.onclick();await flush();
+  const likes=metadata.requests.slice(beforeLike).filter(r=>r.url.endsWith('/like'));assert.equal(likes.length,1,'like click is debounced');assert.equal(likes[0].body.trackKey,'c'.repeat(64),'like targets the currently displayed song');
+  assert(metadata.requests.slice(beforeLike).every(r=>!r.url.endsWith('/command')&&!r.url.endsWith('/timer')),'liking does not play, pause, skip or change focus ownership');
+  metadata.setLikeSupported(false);metadata.setNow(metadata.now()+2000);metadata.runIntervals();await flush();assert.equal(likeButton.disabled,true,'older helpers do not advertise unsupported like controls');
+  metadata.timer({signedIn:false,running:false});await flush();assert.equal(metadata.intervals.size,0,'sign-out stops polling');
 
   const race=harness();await flush();const release=await race.holdPlay();race.timer();await flush();race.timer({mode:'short'});await flush();assert(race.requests.at(-1).url.endsWith('/pause'),'break pause does not wait for an in-flight resume');release();await flush();
   assert(race.requests.at(-1).url.endsWith('/pause'),'late resume response cannot leave a break playing');

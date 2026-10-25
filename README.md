@@ -44,7 +44,11 @@ Settings includes the normal alarm duration (0 means until dismissed), the durat
 
 ### Windows desktop: works with Spotify Free
 
-Settings → Spotify defaults to **Windows desktop**. Download the helper ZIP from Settings, unzip it and run Start-Cadence-Desktop.cmd. Its local page shows a temporary pairing code. Paste that code in Cadence and connect. Choose a song in Spotify first. No developer app, Premium subscription, Spotify login, third-party package or admin rights are needed for this route.
+Settings → Spotify defaults to **Windows desktop**. Download the helper ZIP from Settings, unzip it and run Start-Cadence-Desktop.cmd. Its local page has a Show pairing code button for the temporary code. Paste that code in Cadence and connect. Choose a song in Spotify first. No developer app, Premium subscription, Spotify login, third-party package or admin rights are needed for this route.
+
+The helper page and compact player have a **Like / unlike song** button using [Spotify's documented Alt+Shift+B shortcut](https://support.spotify.com/us/article/keyboard-shortcuts/). It brings Spotify to the front and toggles the song's saved state. It is not an add-only action: an already liked song can be unliked. The helper checks that the song has not changed and that Spotify has focus before sending the shortcut; rapid double clicks are ignored. It never sends playback keys for this action. The helper page can use this button before timer pairing. Update and restart the helper to get these controls.
+
+Title, artist and artwork refresh every two seconds. Metadata polling starts when the timer becomes signed in, even if desktop pairing finished earlier, and routine settings/sync updates do not restart its interval. Helper playback and metadata checks remain separate from the Like/Unlike action.
 
 The helper uses [Windows media sessions](https://learn.microsoft.com/en-us/uwp/api/windows.media.control.globalsystemmediatransportcontrolssession) to target Spotify, including play, pause, previous/next, seeking, metadata and available album artwork. It never sends a system-wide media-key toggle. Controls that Spotify disables, including restrictions during ads or on Free accounts, remain unavailable.
 

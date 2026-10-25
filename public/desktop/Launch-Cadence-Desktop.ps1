@@ -5,12 +5,12 @@ function Test-CadenceReady {
   try {
     $request=[Net.HttpWebRequest]::Create($address+'health');$request.Timeout=500;$request.Proxy=$null
     $response=$request.GetResponse()
-    try {$reader=[IO.StreamReader]::new($response.GetResponseStream());$data=$reader.ReadToEnd() | ConvertFrom-Json;return $data.ok -eq $true -and $data.service -eq 'cadence-desktop'}finally{$response.Dispose()}
+    try {$reader=[IO.StreamReader]::new($response.GetResponseStream());$data=$reader.ReadToEnd() | ConvertFrom-Json;$script:helperVersion=[int]$data.version;return $data.ok -eq $true -and $data.service -eq 'cadence-desktop'}finally{$response.Dispose()}
   }catch{return $false}
 }
-if(Test-CadenceReady){if(-not $NoBrowser){Start-Process $address};Write-Output 'Cadence Desktop is already ready.';exit 0}
+if(Test-CadenceReady){if(-not $NoBrowser){Start-Process $address};if($script:helperVersion -lt 3){Write-Warning 'An older helper is running. Finish the current focus interval, stop that helper, then run this launcher again for Like/Unlike controls. Current playback was left alone.'}else{Write-Output 'Cadence Desktop is already ready.'};exit 0}
 $scriptFile=Join-Path $PSScriptRoot 'Cadence-Desktop.ps1'
-if(-not (Test-Path -LiteralPath $scriptFile)){throw 'Extract the entire ZIP first. Keep the launcher and Cadence-Desktop.ps1 in the same folder.'}
+if(-not (Test-Path -LiteralPath $scriptFile) -or -not (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'helper.html'))){throw 'Extract the entire ZIP first. Keep the launcher, helper.html and Cadence-Desktop.ps1 in the same folder.'}
 $logBase=Join-Path ([IO.Path]::GetTempPath()) ('Cadence-Desktop-'+[DateTime]::Now.ToString('yyyyMMdd-HHmmss')+'-'+$PID)
 $arguments='-NoProfile -File '+[char]34+$scriptFile+[char]34
 $process=Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden -ArgumentList $arguments -RedirectStandardOutput ($logBase+'.log') -RedirectStandardError ($logBase+'.error.log') -PassThru

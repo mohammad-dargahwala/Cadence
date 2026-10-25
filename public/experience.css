@@ -87,6 +87,7 @@ cadence-settings{display:block;grid-column:1/-1}
 .music-controls button{border:0;background:transparent;color:var(--fg);border-radius:50%;width:32px;height:32px;padding:7px;display:grid;place-items:center}
 .music-controls button:hover{background:var(--pill)}
 .music-controls button:disabled{opacity:.35;cursor:default!important}
+.music-controls button[hidden]{display:none!important}
 .music-controls svg{width:16px;height:16px;fill:currentColor}
 #cadence-music[data-mode=hide] .music-art,#cadence-music[data-mode=hide] .music-brand,#cadence-music[data-mode=hide] .music-title,#cadence-music[data-mode=hide] .music-artist{display:none}
 #cadence-music[data-mode=hide] .music-art-link,#cadence-music[data-mode=minimalist] .music-art-link{display:none}
