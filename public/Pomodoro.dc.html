@@ -10,6 +10,7 @@
 <script src="./analytics-core.js"></script>
 <script src="./sync.js"></script>
 <link rel="stylesheet" href="./experience.css">
+<script src="./atmospheres.js" defer></script>
 <script src="./experience.js" defer></script>
 </head>
 <body>
@@ -365,7 +366,7 @@ a:hover{color:var(--accent2)}
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
             <sc-for list="{{ themeList }}" as="th" hint-placeholder-count="4">
               <button data-magnet="1" onClick="{{ th.go }}" style="display:flex;flex-direction:column;gap:12px;padding:14px;border:1.5px solid {{ th.cardB }};border-radius:15px;background:{{ th.cardBg }};text-align:left;transition:transform .25s cubic-bezier(.34,1.4,.5,1),border-color .3s" style-hover="transform:translateY(-3px)" style-active="transform:scale(.96)">
-                <span class="theme-preview" style="background:{{ th.preview }}">
+                <span class="theme-preview" data-scene="{{ th.id }}" style="background:{{ th.preview }}">
                   <span style="width:22px;height:22px;border-radius:7px;background:{{ th.s1 }}"></span>
                   <span style="width:22px;height:22px;border-radius:7px;background:{{ th.s2 }}"></span>
                   <span style="width:22px;height:22px;border-radius:7px;background:{{ th.s3 }}"></span>
@@ -422,10 +423,10 @@ a:hover{color:var(--accent2)}
 <script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;graphite&quot;,&quot;ember&quot;,&quot;mist&quot;,&quot;clay&quot;],&quot;default&quot;:&quot;graphite&quot;,&quot;tsType&quot;:&quot;'graphite'|'ember'|'mist'|'clay'&quot;,&quot;section&quot;:&quot;Appearance&quot;},&quot;ambientMotion&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Appearance&quot;},&quot;magnetStrength&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:0.55,&quot;min&quot;:0,&quot;max&quot;:1,&quot;step&quot;:0.05,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Cursor&quot;}}">
 class Component extends DCLogic {
   themes = {
-    aurora: {"name":"Aurora","bg":"#080f20","bg2":"#10192c","fg":"#eff9ff","fg2":"#e3e6f0b8","fg3":"#c2ccd995","card":"#10142199","cardB":"#ffffff20","pill":"#ffffff12","accent":"#7fe6c1","accent2":"#aa9bff","btnFg":"#080f20","glow":"#7fe6c145","ring":"#7fe6c1","wave1":"#7fe6c150","wave2":"#aa9bff38"},
-    solstice: {"name":"Solstice","bg":"#22121c","bg2":"#301d27","fg":"#fff4e5","fg2":"#e3e6f0b8","fg3":"#c2ccd995","card":"#10142199","cardB":"#ffffff20","pill":"#ffffff12","accent":"#ffc59b","accent2":"#f38e9a","btnFg":"#22121c","glow":"#ffc59b45","ring":"#ffc59b","wave1":"#ffc59b50","wave2":"#f38e9a38"},
-    sakura: {"name":"Sakura","bg":"#f6eef3","bg2":"#fff8fb","fg":"#302336","fg2":"#514656","fg3":"#716575","card":"#ffffff9c","cardB":"#62516b26","pill":"#72607e14","accent":"#a34b73","accent2":"#8070b0","btnFg":"#fff","glow":"#a34b7345","ring":"#a34b73","wave1":"#a34b7350","wave2":"#8070b038"},
-    tidal: {"name":"Tidal","bg":"#061923","bg2":"#0b2532","fg":"#e4f9ff","fg2":"#e3e6f0b8","fg3":"#c2ccd995","card":"#10142199","cardB":"#ffffff20","pill":"#ffffff12","accent":"#68d6eb","accent2":"#76a5ff","btnFg":"#061923","glow":"#68d6eb45","ring":"#68d6eb","wave1":"#68d6eb50","wave2":"#76a5ff38"},
+    aurora: {"name":"Stardust","bg":"#080f20","bg2":"#10192c","fg":"#eff9ff","fg2":"#e3e6f0b8","fg3":"#c2ccd995","card":"#10142199","cardB":"#ffffff20","pill":"#ffffff12","accent":"#dbc1f2","accent2":"#9ecbdc","btnFg":"#080f20","glow":"#b6a0d445","ring":"#dbc1f2","wave1":"#9076bd50","wave2":"#d4bda038"},
+    solstice: {"name":"Rivers of Color","bg":"#15131e","bg2":"#211d2c","fg":"#fff4e5","fg2":"#e3e6f0b8","fg3":"#c2ccd995","card":"#10142199","cardB":"#ffffff20","pill":"#ffffff12","accent":"#ffc59b","accent2":"#f38e9a","btnFg":"#22121c","glow":"#ffc59b45","ring":"#ffc59b","wave1":"#ffc59b50","wave2":"#f38e9a38"},
+    sakura: {"name":"Cherry Blossom","bg":"#f6eef3","bg2":"#fff8fb","fg":"#302336","fg2":"#514656","fg3":"#716575","card":"#ffffff9c","cardB":"#62516b26","pill":"#72607e14","accent":"#a34b73","accent2":"#8070b0","btnFg":"#fff","glow":"#a34b7345","ring":"#a34b73","wave1":"#a34b7350","wave2":"#8070b038"},
+    tidal: {"name":"Firefly Grove","bg":"#061c22","bg2":"#0c292b","fg":"#e4f9ff","fg2":"#e3e6f0b8","fg3":"#c2ccd995","card":"#10142199","cardB":"#ffffff20","pill":"#ffffff12","accent":"#b3d987","accent2":"#82c8a7","btnFg":"#061923","glow":"#9fca8745","ring":"#b3d987","wave1":"#77b49850","wave2":"#456f7750"},
     graphite: { name: 'Graphite', bg:'#0e1013', bg2:'#15181d', card:'rgba(255,255,255,.045)', cardB:'rgba(255,255,255,.09)',
       fg:'#f2f3f5', fg2:'rgba(242,243,245,.70)', fg3:'rgba(242,243,245,.40)', pill:'rgba(255,255,255,.09)',
       accent:'oklch(.78 .13 165)', accent2:'oklch(.78 .13 245)', btnFg:'#0e1013',

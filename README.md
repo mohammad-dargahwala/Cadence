@@ -16,17 +16,30 @@ Analytics count focus intervals with at least a minute recorded, including ones 
 
 ## Themes and minimalist settings
 
-The eight themes include Aurora (flowing light), Solstice (sunset dunes), Sakura (drifting petals), and Tidal (ocean contours). Their backgrounds are drawn locally on a canvas. Settings → Minimalist lets you turn backgrounds, movement, the timer wave, cursor effects, round/task details, and interface sounds on or off. System reduced-motion preferences are respected.
+Four animated scenes join the original Graphite, Ember, Mist and Clay themes:
 
-The original background scenes take visual cues from [James Turrell's light fields](https://web.guggenheim.org/exhibitions/turrell/) and [teamLab's Black Waves](https://www.teamlab.art/w/black_waves/); no artwork is copied or downloaded.
+- **Cherry Blossom** — a branching cherry tree with blossoms carried along curved wind streams.
+- **Rivers of Color** — moving veins of paint that fold into marbled currents.
+- **Stardust** — hundreds of particles following braided paths around a star vortex.
+- **Firefly Grove** — layered woodland silhouettes and fireflies drifting through the mist.
+
+The artwork is drawn locally on a canvas, including the previews in Settings. Minimalist settings control backgrounds, movement, the timer wave, cursor effects, round/task details and interface sounds. Reduced motion preserves a complete still composition. The scenes are original code, with visual inspiration from [Refik Anadol’s fluid pigments](https://refikanadol.com/works/unsupervised/) and [teamLab’s nature and particle installations](https://www.teamlab.art/).
 
 ## Spotify
 
-Settings → Spotify includes setup instructions and an exact redirect URI for a Spotify Developer app. Paste its public Client ID and authorize with Spotify. No client secret is needed. Choose a song and an active device in Spotify first; Cadence controls that device through the Web API.
+### Windows desktop: works with Spotify Free
 
-The player can be Off, controls only (Hide), Minimalist, Full, or album cover only, with a separate song-name toggle. Playback resumes during a running focus interval and pauses on timer pause/reset, interval completion, breaks, Off, disconnect, and sign-out. A manual music pause lasts until the next focus block. Keep Cadence open and online for automation; closed or suspended browsers cannot reliably control another device.
+Settings → Spotify defaults to **Windows desktop**. Download the helper ZIP from Settings, unzip it and run Start-Cadence-Desktop.cmd. Its local page shows a temporary pairing code. Paste that code in Cadence and connect. Choose a song in Spotify first. No developer app, Premium subscription, Spotify login, third-party package or admin rights are needed for this route.
 
-Spotify playback control requires Premium. Development-mode apps also require a Premium app owner and an allowlisted listener; see [Spotify's quota modes](https://developer.spotify.com/documentation/web-api/concepts/quota-modes). Authorization uses [PKCE](https://developer.spotify.com/documentation/web-api/tutorials/code-pkce-flow). Tokens are scoped to the signed-in workspace in this browser tab's session storage, excluded from Cadence sync, and cleared on sign-out or disconnect.
+The helper uses [Windows media sessions](https://learn.microsoft.com/en-us/uwp/api/windows.media.control.globalsystemmediatransportcontrolssession) to target Spotify, including play, pause, previous/next, seeking, metadata and available album artwork. It never sends a system-wide media-key toggle. Controls that Spotify disables, including restrictions during ads or on Free accounts, remain unavailable.
+
+It binds only to 127.0.0.1:17842, checks the request host and origin, and requires a random per-run pairing code and a paired-tab ID. The code stays in tab session storage and is never synced to Cloudflare. The browser may ask for local-network permission. The helper owns the absolute focus deadline and a heartbeat lease, allowing background-browser throttling. It pauses on a close signal or within 90 seconds of lost contact, or at the focus deadline, whichever comes first. It pauses once at a timer boundary, then releases control; manually restarted desktop playback is respected while idle. Pairing itself does not take over playback. It runs hidden and does not install a Windows startup task. Stop it from its local page.
+
+### Optional Web API: Premium required
+
+The Web API route remains available in Settings for other devices. It uses a Spotify Developer app’s public Client ID and PKCE authorization; no client secret is needed. This route requires [Spotify Premium and the app’s applicable allowlist](https://developer.spotify.com/documentation/web-api/concepts/quota-modes).
+
+Both routes offer Off, Hide (controls only), Minimalist, Full, or album-cover-only layouts and an optional song name. Music resumes only during a running focus interval. Pause/reset, breaks, alarms, Off, disconnect and sign-out pause it. A manual music pause lasts until the next focus block. Cadence and the chosen connection must remain available for automation.
 
 ## Accounts and saving
 
@@ -50,7 +63,7 @@ npm run dev
 
 Open the URL printed by Wrangler, normally `http://localhost:8787`. This uses a local D1 database with its own accounts.
 
-`npm test` runs analytics, timer/appearance regressions, mocked Spotify playback checks, and local Worker API tests. Spotify checks use a fake clock and mocked transport, not a live Spotify account. The Python browser checks in `test/browser.test.py` need Playwright and a Chrome executable and are not part of that command.
+`npm test` runs analytics, art scene rendering, timer/appearance regressions, mocked Spotify playback checks, and local Worker API tests. Spotify checks use a fake clock and mocked transport, not a live Spotify account. The Python browser checks in `test/browser.test.py` need Playwright and a Chrome executable and are not part of that command.
 
 ## Hosting a copy
 

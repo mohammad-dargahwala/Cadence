@@ -5,13 +5,17 @@ button,a,input[type=checkbox],select{cursor:pointer!important}
 button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent)!important;outline-offset:4px}
 html[data-cursor=true] *,html[data-cursor=true] button{cursor:none!important}
 html:not([data-cursor=true]) #pcRing,html:not([data-cursor=true]) #pcDot{display:none!important}
-#atmosphere{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;opacity:.85;transition:opacity .8s}
+#atmosphere{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;opacity:1;transition:opacity .8s}
 html[data-background=false] #atmosphere{display:none}
 html[data-wave=false] #waveCanvas{visibility:hidden}
 html[data-details=false] .timer-detail{display:none!important}
 html[data-motion=false] *,html[data-motion=false] *:before,html[data-motion=false] *:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
 .theme-preview{width:100%;height:65px;border-radius:9px;position:relative;overflow:hidden;border:1px solid #ffffff16}
 .theme-preview:after{content:'';position:absolute;width:110%;height:90%;border-radius:50%;border:1px solid #ffffff42;left:-5%;top:45%;transform:rotate(-14deg);box-shadow:0 8px 0 #ffffff0b,0 16px 0 #ffffff0b,0 24px 0 #ffffff0b}
+.theme-preview canvas{position:absolute;inset:0;width:100%;height:100%;z-index:1}.theme-preview:has(canvas):after{display:none}
+.timer-face{backdrop-filter:blur(14px)}
+.desktop-setup[hidden],.web-setup[hidden]{display:none!important}
+.desktop-setup a.ex-button{display:inline-block;text-decoration:none}
 cadence-settings{display:block;grid-column:1/-1}
 .experience-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .ex-card{padding:26px;border:1px solid var(--card-b);border-radius:18px;background:var(--card);backdrop-filter:blur(24px);color:var(--fg)}

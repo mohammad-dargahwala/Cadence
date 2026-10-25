@@ -7,10 +7,11 @@ const crypto = require('node:crypto');
 const path = require('node:path');
 const source = fs.readFileSync(path.join(__dirname,'../public/experience.js'),'utf8');
 const flush = async () => { for(let i=0;i<12;i++) await new Promise(setImmediate); };
-function harness() {
-  let now=1000000, sequence=0, pendingPlay;
+function harness(transport='web') {
+  let now=1000000, sequence=0, pendingPlay, nativePlaying=false;
   const callbacks=new Map(), intervals=new Map(), requests=[], listeners={}, data=new Map();
-  const state={workspaceId:'account-a',user:'Tester',settings:{experience:{musicMode:'full'}}};
+  const state={workspaceId:'account-a',user:'Tester',settings:{experience:{musicMode:'full',musicSource:transport}}};
+  if(transport==='desktop') data.set('cadence.desktop.pair',JSON.stringify({owner:'account-a',key:'q'.repeat(32),clientId:'a'.repeat(32)}));
   data.set('cadence.spotify.tokens',JSON.stringify({owner:'account-a',clientId:'a'.repeat(32),access_token:'test-access',refresh_token:'test-refresh',expiresAt:now+3600000}));
   class Element {
     constructor(){this.dataset={};this.style={};this.children=[];this.nodes={};}
@@ -29,7 +30,14 @@ function harness() {
     AbortSignal,localStorage:{setItem(){},getItem(){return null;}},sessionStorage:{getItem:k=>data.get(k),setItem:(k,v)=>data.set(k,v),removeItem:k=>data.delete(k)},
     Date:class extends Date {static now(){return now;}},setTimeout(fn,delay){const id=++sequence;callbacks.set(id,{fn,delay});return id;},clearTimeout:id=>callbacks.delete(id),setInterval(fn){const id=++sequence;intervals.set(id,fn);return id;},clearInterval:id=>intervals.delete(id),requestAnimationFrame(){return 1;},
     fetch:async(url,opts={})=>{
-      requests.push({url,method:opts.method||'GET'});
+      const body=opts.body?JSON.parse(opts.body):null;
+      requests.push({url,method:opts.method||'GET',body});
+      if(url.startsWith('http://127.0.0.1:17842')) {
+        if(url.endsWith('/timer')) nativePlaying=body.allowed && body.deadline>now;
+        if(url.endsWith('/command') && body.action==='pause')nativePlaying=false;
+        if(url.endsWith('/command') && body.action==='play')nativePlaying=true;
+        return {status:200,ok:true,json:async()=>({connected:true,available:true,playing:nativePlaying,title:'Native test song',artist:'Artist',positionMs:20000,durationMs:180000,controls:{play:true,pause:true,seek:false,next:false,previous:true}})};
+      }
       if(url.endsWith('/play') && pendingPlay) { const p=pendingPlay; pendingPlay=null; await p; }
       return {status:204,ok:true,headers:{get(){return null;}}};
     },console
@@ -39,6 +47,7 @@ function harness() {
   return {context,root,state,store,requests,body,callbacks,intervals,data,
     timer(next){context.window.CadenceExperience.timer({signedIn:true,running:true,mode:'focus',remaining:60,deadline:now+60000,view:'timer',alarm:false,...next});},
     setNow(v){now=v;},now:()=>now,
+    setNativePlaying(v){nativePlaying=v;},
     holdPlay(){return new Promise(resolve=>{let release;pendingPlay=new Promise(r=>release=r);resolve(release);});}
   };
 }
@@ -59,13 +68,26 @@ function harness() {
   const n=h.requests.length;h.timer({remaining:59});await flush();assert.equal(h.requests.length,n,'timer ticks do not undo manual pause');
   h.timer({mode:'short'});await flush();h.timer();await flush();assert(h.requests.at(-1).url.endsWith('/play'),'next focus block resumes');
 
-  h.store.saveSettings({experience:{musicMode:'hide',songName:true}});h.timer();
+  h.store.saveSettings({experience:{musicSource:'web',musicMode:'hide',songName:true}});h.timer();
   assert.equal(player.dataset.mode,'hide');assert.equal(player.querySelector('.music-title').hidden,true,'hide mode removes track identity');
-  h.store.saveSettings({experience:{musicMode:'artwork',songName:false}});h.timer();assert.equal(player.querySelector('.music-title').hidden,true,'song-name toggle hides title');
-  h.store.saveSettings({experience:{musicMode:'off'}});h.timer();await flush();assert.equal(player.hidden,true,'off hides player');assert(h.requests.at(-1).url.endsWith('/pause'),'off pauses playback even when setting arrives from another tab');
+  h.store.saveSettings({experience:{musicSource:'web',musicMode:'artwork',songName:false}});h.timer();assert.equal(player.querySelector('.music-title').hidden,true,'song-name toggle hides title');
+  h.store.saveSettings({experience:{musicSource:'web',musicMode:'off'}});h.timer();await flush();assert.equal(player.hidden,true,'off hides player');assert(h.requests.at(-1).url.endsWith('/pause'),'off pauses playback even when setting arrives from another tab');
   const before=h.requests.length;h.timer({mode:'long'});await flush();assert.equal(h.requests.length,before,'off makes no playback commands');
-  h.store.saveSettings({experience:{musicMode:'full',background:false,wave:false,details:false,motion:false}});
+  h.store.saveSettings({experience:{musicSource:'web',musicMode:'full',background:false,wave:false,details:false,motion:false}});
   assert.equal(h.root.dataset.background,'false');assert.equal(h.root.dataset.motion,'false');assert.equal(h.root.dataset.wave,'false');
+
+  const native=harness('desktop');await flush();native.timer();await flush();
+  assert(native.requests.some(r=>r.url.endsWith('/command')&&r.body.action==='play'),'desktop focus sends an explicit play command');
+  assert(native.requests.some(r=>r.url.endsWith('/timer')&&r.body.allowed&&r.body.deadline>native.now()),'native helper receives the absolute focus deadline');
+  native.timer({mode:'long'});await flush();
+  assert(native.requests.some(r=>r.url.endsWith('/timer')&&r.body.allowed===false),'break revokes native focus lease');
+  assert.equal(native.requests.some(r=>r.url.includes('api.spotify.com')),false,'desktop route never calls the Premium API');
+  const nativePlayer=native.body.children[0];
+  assert.equal(nativePlayer.querySelector('.music-controls').children.find(b=>b.dataset.action==='next').disabled,true,'Spotify-disabled native controls remain disabled');
+  native.store.subscriber(native.state);
+  const beforeManual=native.requests.length;native.setNativePlaying(true);
+  [...native.intervals.values()][0]();await flush();
+  assert.equal(native.requests.slice(beforeManual).some(r=>r.url.endsWith('/command')&&r.body.action==='pause'),false,'idle metadata polling does not fight manual desktop playback');
 
   const race=harness();await flush();const release=await race.holdPlay();race.timer();await flush();race.timer({mode:'short'});await flush();assert(race.requests.at(-1).url.endsWith('/pause'),'break pause does not wait for an in-flight resume');release();await flush();
   assert(race.requests.at(-1).url.endsWith('/pause'),'late resume response cannot leave a break playing');

@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const defaults = { minimalist:false, background:true, motion:true, wave:true, cursor:false, details:true, clickSounds:true, musicMode:'off', songName:true };
+  const defaults = { minimalist:false, background:true, motion:true, wave:true, cursor:false, details:true, clickSounds:true, musicMode:'off', songName:true, musicSource:'desktop' };
   const store = window.CadenceStore;
   const root = document.documentElement;
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
@@ -9,21 +9,31 @@
   let wanted = true, lastAllowed = false, receivedTimer = false, queue = Promise.resolve(), retryAt = 0, refreshing;
   const get = (key, fallback) => { try { return JSON.parse(sessionStorage.getItem(key)) || fallback; } catch { return fallback; } };
   const put = (key, value) => { try { value === null ? sessionStorage.removeItem(key) : sessionStorage.setItem(key, JSON.stringify(value)); } catch {} };
+  const BRIDGE='http://127.0.0.1:17842';
+  let desktop=get('cadence.desktop.pair',null), desktopReady=false, heartbeatId, desktopControls={};
+  const connected=()=>prefs.musicSource==='desktop'?desktopReady:!!token;
   const allowed = () => timer.signedIn && timer.running && timer.mode === 'focus' && !timer.alarm && timer.remaining > 0 && (!timer.deadline || Date.now() < timer.deadline) && prefs.musicMode !== 'off';
-  const active = () => !!token && timer.signedIn && prefs.musicMode !== 'off';
+  const active = () => connected() && timer.signedIn && prefs.musicMode !== 'off';
   const updateMessage = text => { message = text; document.querySelectorAll('.music-status').forEach(el => { el.textContent = text; }); };
   function save(patch) { store.saveSettings({ experience: { ...prefs, ...patch } }); }
   function apply(st) {
-    const wasEnabled=prefs.musicMode!=='off';
+    const wasEnabled=prefs.musicMode!=='off', previousSource=prefs.musicSource;
     prefs = {...defaults, ...(st.settings.experience || {})};
-    if(wasEnabled && prefs.musicMode==='off' && token) enqueue(async()=>{ if(token) await api('/pause','PUT'); playing=false; renderPlayer(); });
+    if(wasEnabled && (prefs.musicMode==='off' || previousSource!==prefs.musicSource)) {
+      if(previousSource==='desktop' && desktopReady) bridge('/timer',{allowed:false,deadline:0}).catch(()=>{});
+      if(previousSource==='web' && token) fetch('https://api.spotify.com/v1/me/player/pause',{method:'PUT',headers:{Authorization:'Bearer '+token.access_token},keepalive:true}).catch(()=>{});
+      playing=false;
+    }
     for (const key of ['background','wave','details','clickSounds']) root.dataset[key] = String(prefs[key]);
     root.dataset.cursor = String(prefs.cursor && matchMedia('(pointer:fine)').matches);
     root.dataset.motion = String(prefs.motion && !reduced.matches);
     if (account !== st.workspaceId) {
+      if(desktopReady) bridge('/disconnect',{}).catch(()=>{});
+      desktopReady=false;
       if (token && playing) fetch('https://api.spotify.com/v1/me/player/pause',{method:'PUT',headers:{Authorization:'Bearer '+token.access_token},keepalive:true}).catch(()=>{});
       token = null; track = null; playing = false;
       account = st.workspaceId;
+      if(desktop && desktop.owner!==account){desktop=null;put('cadence.desktop.pair',null);}
       const saved = get('cadence.spotify.tokens', null);
       if (saved && saved.owner === account) token = saved;
       else put('cadence.spotify.tokens', null);
@@ -45,6 +55,7 @@
     return refreshing;
   }
   async function api(path, method='GET', guard) {
+    if(prefs.musicSource==='desktop') return desktopAPI(path,method,guard);
     if (Date.now() < retryAt) throw Error('Spotify is busy. Playback controls will retry shortly.');
     const owner = account, auth = await accessToken();
     if (owner !== account || (guard && !guard())) return null;
@@ -62,11 +73,12 @@
     return queue;
   }
   function reconcile(force=false) {
-    const yes = allowed();
+    const yes = allowed(), previouslyAllowed=lastAllowed;
     if (!force && yes === lastAllowed) return;
     lastAllowed = yes;
     if (!active()) return;
     if (!yes) {
+      if(prefs.musicSource==='desktop' && !previouslyAllowed) return;
       // Pause immediately, even if a preceding resume request is still pending.
       api('/pause','PUT').then(()=>{playing=false;renderPlayer();updateMessage('Music paused · focus periods only.');}).catch(e=>updateMessage(e.message));
       return;
@@ -89,14 +101,58 @@
       const data = await api('');
       if (owner !== account || !active()) return;
       track = data && data.item || null; playing=!!(data && data.is_playing);
-      if (playing && !allowed()) reconcile(true);
+      if (playing && !allowed() && prefs.musicSource!=='desktop') reconcile(true);
+      if (playing && !allowed() && prefs.musicSource==='desktop') updateMessage('Timer idle · desktop playback is under your control.');
       if (!track) updateMessage('Open Spotify and select a song on the device you want to use.');
       renderPlayer();
     } catch(e) { updateMessage(e.message); }
   }
   function schedulePoll() {
     clearInterval(pollId);
+    clearInterval(heartbeatId);
     if(active()) pollId=setInterval(poll,5000);
+    if(active() && prefs.musicSource==='desktop') heartbeatId=setInterval(heartbeat,2000);
+  }
+  async function bridge(path,body,credentials=desktop) {
+    if(!credentials) throw Error('Start and connect the desktop helper in Settings.');
+    const r=await fetch(BRIDGE+path,{method:body?'POST':'GET',signal:AbortSignal.timeout(4500),headers:{'Content-Type':'application/json','X-Cadence-Key':credentials.key,'X-Cadence-Client':credentials.clientId},...(body?{body:JSON.stringify(body)}:{})});
+    const data=await r.json();
+    if(!r.ok) throw Error(data.error||'Desktop helper could not complete that action.');
+    return data;
+  }
+  async function heartbeat() {
+    if(!desktopReady || prefs.musicSource!=='desktop') return;
+    try {await bridge('/timer',{allowed:allowed() && wanted,deadline:timer.deadline||0,background:document.hidden});}
+    catch {desktopReady=false;clearInterval(heartbeatId);updateMessage('Desktop helper disconnected. Restart it and connect again in Settings.');renderPlayer();}
+  }
+  function desktopState(data) {
+    desktopControls=data.controls||{};
+    return data.available ? {is_playing:data.playing,progress_ms:data.positionMs,item:{name:data.title||'Spotify',duration_ms:data.durationMs,artists:[{name:data.artist||''}],album:{images:data.artwork?[{url:data.artwork}]:[]},external_urls:{spotify:'https://open.spotify.com'}}}:null;
+  }
+  async function desktopAPI(path,method,guard) {
+    if(!desktopReady) throw Error('Connect the Windows desktop helper in Settings first.');
+    if(guard && !guard()) return null;
+    if(method==='GET') return desktopState(await bridge('/status'));
+    const action=path.startsWith('/seek') ? (path.includes('direction=back')?'back':'forward') : path.slice(1);
+    if(action==='play') {
+      await heartbeat();
+      if(!allowed() || !wanted || !desktopReady) return null;
+    }
+    if(action==='pause') await bridge('/timer',{allowed:false,deadline:0});
+    return desktopState(await bridge('/command',{action}));
+  }
+  async function connectDesktop(key,activate=true) {
+    if(!/^[A-Za-z0-9_-]{32}$/.test(key)) return updateMessage('Paste the current pairing code shown on the desktop helper page.');
+    const credentials={key,owner:account,clientId:random().slice(0,32)};
+    try {
+      const data=await bridge('/pair',{},credentials);
+      desktop=credentials;desktopReady=true;put('cadence.desktop.pair',desktop);
+      save({musicSource:'desktop',musicMode:activate && prefs.musicMode==='off'?'full':prefs.musicMode});
+      const state=desktopState(data);track=state&&state.item;playing=!!(state&&state.is_playing);
+      updateMessage('Desktop connected · no Premium needed. Music follows your focus timer.');
+      schedulePoll();await heartbeat();reconcile(true);renderPlayer();
+      document.querySelectorAll('cadence-settings').forEach(el=>{el.sync();const keyInput=el.querySelector('.desktop-key');if(keyInput)keyInput.value='';});
+    } catch(e) {updateMessage(e.message==='Failed to fetch'?'Start the helper and allow the browser’s local-network permission, then connect again.':e.message);}
   }
   const random = () => Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2,'0')).join('');
   const base64 = bytes => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
@@ -128,12 +184,17 @@
       if(account!==pending.owner) return;
       token={...data,owner:account,clientId:pending.clientId,expiresAt:Date.now()+data.expires_in*1000};
       put('cadence.spotify.tokens',token);
-      save({musicMode:prefs.musicMode==='off'?'full':prefs.musicMode});
+      save({musicSource:'web',musicMode:prefs.musicMode==='off'?'full':prefs.musicMode});
       updateMessage('Connected. Open Spotify and select a song, then start a focus block.');
       await poll(); reconcile(true);
     } catch(e) { updateMessage(e.message); }
   }
   async function disconnect() {
+    if(prefs.musicSource==='desktop') {
+      if(desktopReady) {try{await bridge('/disconnect',{});}catch{}}
+      desktop=null;desktopReady=false;put('cadence.desktop.pair',null);clearInterval(heartbeatId);clearInterval(pollId);track=null;playing=false;
+      renderPlayer();updateMessage('Desktop disconnected.');document.querySelectorAll('cadence-settings').forEach(el=>el.sync());return;
+    }
     await enqueue(async()=>{ if(token) await api('/pause','PUT'); });
     token=null; track=null; playing=false; put('cadence.spotify.tokens',null);
     clearInterval(pollId); renderPlayer(); updateMessage('Disconnected from Spotify on this tab.');
@@ -161,19 +222,23 @@
     player.dataset.mode=prefs.musicMode;
     const image=player.querySelector('img'), title=player.querySelector('.music-title');
     const art=track && track.album && track.album.images && track.album.images[0];
-    image.hidden=!art; if(art && /^https:\/\//.test(art.url)) image.src=art.url;
+    image.hidden=!art; if(art && (/^https:\/\//.test(art.url) || (prefs.musicSource==='desktop' && /^data:image\/(png|jpeg);base64,/.test(art.url)))) image.src=art.url;
     player.querySelector('.music-placeholder').hidden=!!art;
     player.querySelector('.music-art-link').href=track && track.external_urls && track.external_urls.spotify || 'https://open.spotify.com';
-    title.textContent=track ? track.name : token ? 'Choose a song in Spotify' : 'Set up music in Settings';
+    title.textContent=track ? track.name : connected() ? 'Choose a song in Spotify' : 'Set up music in Settings';
     title.href=track && track.external_urls && track.external_urls.spotify || 'https://open.spotify.com';
-    title.onclick=!token ? e=>{e.preventDefault();const settings=Array.from(document.querySelectorAll('nav button')).find(b=>b.textContent.trim()==='Settings');if(settings)settings.click();}:null;
+    title.onclick=!connected() ? e=>{e.preventDefault();const settings=Array.from(document.querySelectorAll('nav button')).find(b=>b.textContent.trim()==='Settings');if(settings)settings.click();}:null;
     title.hidden=!prefs.songName || prefs.musicMode==='hide';
     player.querySelector('.music-artist').textContent=track ? track.artists.map(a=>a.name).join(', ') : 'Plays during focus. Pauses for breaks.';
-    player.querySelectorAll('button').forEach(b=>{ b.disabled=!token || (!allowed() && b.dataset.action==='play'); });
+    player.querySelectorAll('button').forEach(b=>{
+      const action=b.dataset.action;
+      const nativeSupported=prefs.musicSource!=='desktop' || !track || (action==='play' ? desktopControls[playing?'pause':'play']!==false : desktopControls[action==='back'||action==='forward'?'seek':action]!==false);
+      b.disabled=!connected() || (!allowed() && action==='play') || !nativeSupported;
+    });
     const play=player.querySelector('[data-action=play]'); play.innerHTML=svg(playing?'pause':'play'); play.setAttribute('aria-label',playing?'Pause music':'Play music');
   }
   function control(action) {
-    if(!token) return;
+    if(!connected()) return;
     enqueue(async()=>{
       if(action==='play') {
         if(!allowed()) return;
@@ -185,6 +250,7 @@
         await api('/'+action,'POST',active);
         if(!allowed()) await api('/pause','PUT');
       } else {
+        if(prefs.musicSource==='desktop'){await api('/seek?direction='+action,'PUT',active);renderPlayer();await poll();return;}
         const state=await api('');
         if(state && state.item) await api('/seek?position_ms='+Math.max(0,Math.min(state.item.duration_ms-1,state.progress_ms+(action==='back'?-15000:15000))),'PUT',active);
       }
@@ -194,6 +260,15 @@
   class CadenceSettings extends HTMLElement {
     connectedCallback() {
       this.innerHTML=`<div class="experience-grid"><section class="ex-card"><div class="ex-eyebrow">LESS, AT YOUR OWN PACE</div><h2>Minimalist</h2><p>A quiet canvas, or a little atmosphere. Make space for the way you focus.</p><div class="visual-toggles"></div></section><section class="ex-card"><div class="ex-eyebrow">YOUR FOCUS SOUNDTRACK</div><h2>Spotify</h2><p>Music plays while focus is running. Pausing, resetting, finishing an interval or starting a break pauses it too.</p><label class="ex-row">Player style<select data-pref="musicMode"><option value="off">Off</option><option value="hide">Hide · controls only</option><option value="minimalist">Minimalist</option><option value="full">Full player</option><option value="artwork">Album cover only</option></select></label><label class="ex-row">Show song name<input type="checkbox" data-pref="songName"></label><div class="music-status" role="status"></div><details class="ex-setup"><summary>Connect Spotify · setup</summary><p style="margin-top:12px">Requires Spotify Premium. In development mode, the app owner needs Premium and each listener must be on the app’s user allowlist.</p><ol><li>Open the <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">Spotify Developer Dashboard</a> and create an app with Web API access.</li><li>Add this exact redirect URI:<br><code class="redirect-uri"></code></li><li>Add your Spotify account under User Management, if required.</li><li>Copy the public Client ID below and connect. Keep the client secret private; Cadence does not need it.</li><li>Open Spotify, choose a song and an active playback device, then start your focus timer here.</li></ol><label>Public Client ID<input type="text" class="spotify-client" placeholder="32-character Client ID" autocomplete="off" spellcheck="false"></label><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="ex-button primary connect">Connect Spotify</button><button class="ex-button disconnect">Disconnect</button></div><p style="margin:12px 0 0">The player controls your active Spotify device. Authorization stays in this browser tab and is never synced to your Cadence account. Keep Cadence open for timer automation.</p></details></section></div>`;
+      const musicCard=this.querySelectorAll('.ex-card')[1];
+      const sourceLabel=document.createElement('label');sourceLabel.className='ex-row';
+      sourceLabel.innerHTML='<span>Connect through</span><select data-pref="musicSource"><option value="desktop">Windows desktop · Free</option><option value="web">Spotify Web API · Premium</option></select>';
+      musicCard.insertBefore(sourceLabel,musicCard.querySelector('.ex-row'));
+      const desktopSetup=document.createElement('div');desktopSetup.className='desktop-setup ex-setup';
+      desktopSetup.innerHTML='<h3 style="font-size:13px;margin:0 0 8px">Desktop connection · no Premium needed</h3><p>Use Spotify on this Windows PC. Download and unzip the helper, then double-click Start-Cadence-Desktop.cmd. It runs in the background and opens a page with your pairing code.</p><a class="ex-button" href="/desktop/Cadence-Desktop.zip" download>Download desktop helper</a><ol><li>Start the helper and copy its pairing code.</li><li>Paste it below and connect. Allow local-network access if your browser asks.</li><li>Choose a song in Spotify, then start a focus interval.</li></ol><label>Pairing code<input type="text" class="desktop-key" placeholder="Code from the desktop helper" autocomplete="off" spellcheck="false"></label><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="ex-button primary connect-desktop">Connect desktop</button><a class="ex-button" href="http://127.0.0.1:17842/" target="_blank" rel="noopener">Open helper</a></div><p style="margin-top:12px">Only Spotify is controlled. If the tab closes or loses contact, the helper pauses music on tab close or within 90 seconds of losing contact. Spotify’s ad and playback restrictions still apply; unavailable controls stay disabled.</p>';
+      musicCard.insertBefore(desktopSetup,musicCard.querySelector('details'));
+      this.querySelector('details').classList.add('web-setup');
+      this.querySelector('.connect-desktop').onclick=()=>connectDesktop(this.querySelector('.desktop-key').value.trim());
       for(const [key,label,help] of [
         ['minimalist','Minimalist mode','Turn off decoration in one step. Individual choices below remain yours.'],
         ['background','Theme background','A living scene made for your selected theme.'],
@@ -224,77 +299,42 @@
     }
     sync() {
       this.querySelectorAll('[data-pref]').forEach(el=>{ if(el.type==='checkbox') el.checked=!!prefs[el.dataset.pref]; else el.value=prefs[el.dataset.pref]; });
-      const status=this.querySelector('.music-status'); if(status) status.textContent=message || (token?'Connected · focus periods only.':'Connect your account below to enable playback.');
-      const b=this.querySelector('.disconnect'); if(b) b.disabled=!token;
+      const status=this.querySelector('.music-status'); if(status) status.textContent=message || (connected()?'Connected · focus periods only.':'Connect your account below to enable playback.');
+      const native=this.querySelector('.desktop-setup'),web=this.querySelector('.web-setup');if(native)native.hidden=prefs.musicSource!=='desktop';if(web)web.hidden=prefs.musicSource==='desktop';
+      const b=this.querySelector('.disconnect'); if(b) b.disabled=!connected();
     }
   }
   customElements.define('cadence-settings',CadenceSettings);
 
-  // Original procedural scenes: light fields, layered dunes, petals, and currents.
-  // No remote images or animated video downloads are needed.
-    let frame=0, lastFrame=0, lastScene='', canvas, ctx;
+  let lastFrame=0, lastScene='', lastPreview=0;
   function drawAtmosphere(now) {
-    canvas=document.getElementById('atmosphere'); if(!canvas) return;
-    ctx=canvas.getContext('2d'); if(!ctx) return;
-    const theme=root.dataset.theme||'graphite', motion=root.dataset.motion!=='false';
+    if(!window.CadenceAtmospheres) return;
+    const canvas=document.getElementById('atmosphere');if(!canvas)return;
+    const theme=root.dataset.theme||'graphite',motion=root.dataset.motion!=='false';
     const scene=theme+innerWidth+innerHeight+prefs.background+motion;
-    if(!prefs.background || document.hidden || (!motion && scene===lastScene) || (motion && now && now-lastFrame<50)) return;
-    lastFrame=now; lastScene=scene;
-    const w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,1.5);
+    if(!document.hidden && now-lastPreview>1000) {
+      lastPreview=now;
+      document.querySelectorAll('.theme-preview[data-scene]').forEach(el=>{
+        let preview=el.querySelector('canvas');
+        if(!preview){preview=document.createElement('canvas');preview.setAttribute('aria-hidden','true');el.append(preview);}
+        const width=Math.round(el.clientWidth),height=Math.round(el.clientHeight);if(!width||!height)return;
+        if(preview.width!==width||preview.height!==height){preview.width=width;preview.height=height;}
+        window.CadenceAtmospheres.draw(preview.getContext('2d'),width,height,24,el.dataset.scene);
+      });
+    }
+    if(!prefs.background||document.hidden||(!motion&&scene===lastScene)||(motion&&now&&now-lastFrame<33))return;
+    lastFrame=now;lastScene=scene;
+    const w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,1.5),ctx=canvas.getContext('2d');if(!ctx)return;
     if(canvas.width!==Math.round(w*dpr)||canvas.height!==Math.round(h*dpr)){canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);}
-    ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
-    const t=motion?now/1000:0;
-    function glow(x,y,r,color) { const g=ctx.createRadialGradient(x,y,0,x,y,r);g.addColorStop(0,color);g.addColorStop(1,'transparent');ctx.fillStyle=g;ctx.fillRect(0,0,w,h); }
-    function ribbon(base,amp,phase,color) {
-      ctx.beginPath();ctx.moveTo(-20,h+20);
-      for(let x=-20;x<=w+20;x+=12) ctx.lineTo(x,h*base+Math.sin(x/w*5+phase)*amp+Math.cos(x/w*9+phase*.6)*amp*.25);
-      ctx.lineTo(w+20,h+20);ctx.closePath();ctx.fillStyle=color;ctx.fill();
-    }
-    if(theme==='solstice') {
-      glow(w*.75,h*.27,Math.max(w,h)*.62,'#e9867140');glow(w*.18,h*.7,w*.5,'#b64e6230');
-      const g=ctx.createLinearGradient(0,h*.08,0,h*.45);g.addColorStop(0,'#ffdfab90');g.addColorStop(1,'#ff9c6b05');
-      ctx.fillStyle=g;ctx.beginPath();ctx.arc(w*.73,h*.29,Math.min(w,h)*.17,0,Math.PI*2);ctx.fill();
-      for(let i=0;i<7;i++) ribbon(.61+i*.063,35+i*4,t*.025+i*.65,['#ae5f6838','#90435840','#70344960','#53273c70','#3c203280','#301c2d99','#241725bb'][i]);
-    } else if(theme==='sakura') {
-      glow(w*.2,h*.28,w*.6,'#e7a7cb60');glow(w*.85,h*.68,w*.52,'#b6acd255');
-      for(let i=0;i<5;i++) ribbon(.66+i*.09,25,t*.018+i,'#a182af09');
-      for(let i=0;i<28;i++) {
-        const x=((i*137.5+t*(3+i%4))%(w+80))-40,y=((i*97+t*(2+i%3))%(h+80))-40;
-        ctx.save();ctx.translate(x,y);ctx.rotate(i+t*.04);ctx.fillStyle=['#ca83a52a','#f1b2ca40','#a894c52a'][i%3];ctx.beginPath();ctx.ellipse(0,0,4+i%4,2+i%3,.4,0,Math.PI*2);ctx.fill();ctx.restore();
-      }
-    } else if(theme==='tidal') {
-      glow(w*.8,h*.15,w*.6,'#165e8555');glow(w*.12,h*.9,w*.7,'#0e928c38');
-      for(let i=0;i<24;i++) {
-        ctx.beginPath();for(let x=0;x<=w+12;x+=12) {const y=h*(.38+i*.036)+Math.sin(x/w*7+t*.065+i*.18)*(32+i*2)+Math.sin(x/w*3-t*.035)*35;x?ctx.lineTo(x,y):ctx.moveTo(x,y);}
-        ctx.strokeStyle=i%4===0?'#6dcdd42b':'#62a7cc12';ctx.lineWidth=i%4===0?1.4:.7;ctx.stroke();
-      }
-    } else if(theme==='aurora') {
-      glow(w*.2+Math.sin(t*.02)*w*.1,h*.22,w*.65,'#23b79724');glow(w*.85,h*.55,w*.6,'#7450ba28');
-      for(let i=0;i<6;i++) {
-        const band=(x)=>h*.42+Math.sin(x/w*4+t*.035+i*.12)*h*.22+Math.sin(x/w*8-t*.02)*h*.055;
-        ctx.save();ctx.filter='blur(14px)';ctx.beginPath();
-        for(let x=-w*.3;x<=w*1.3;x+=20) {const y=band(x)+i*9; x===-w*.3?ctx.moveTo(x,y):ctx.lineTo(x,y);}
-        for(let x=w*1.3;x>=-w*.3;x-=20) ctx.lineTo(x,band(x)+i*9+30+i*5);
-        ctx.closePath();const g=ctx.createLinearGradient(0,0,w,h*.5);g.addColorStop(0,'#51edb900');g.addColorStop(.25,'#51edb925');g.addColorStop(.65,'#68c9db20');g.addColorStop(.85,'#9d81fb20');g.addColorStop(1,'#9d81fb00');ctx.fillStyle=g;ctx.fill();ctx.restore();
-      }
-      for(let i=0;i<35;i++){ctx.fillStyle='#d5f7ff'+(i%3===0?'55':'24');ctx.beginPath();ctx.arc((i*211.73)%w,(i*91.17)%(h*.68),i%3===0?1.1:.6,0,Math.PI*2);ctx.fill();}
-    } else {
-      const colors=theme==='aurora'?['#51edb9','#9d81fb','#3a7cbf']:theme==='ember'?['#d98044','#bd5264','#824d35']:theme==='clay'?['#ba8466','#a7ba8b','#cebda1']:theme==='mist'?['#83a7de','#a1c8cb','#c1b2df']:['#50b99d','#5b88ca','#8364b0'];
-      glow(w*.1,h*.1,w*.6,colors[0]+'20');glow(w*.9,h*.7,w*.6,colors[1]+'18');
-      for(let i=0;i<8;i++) {
-        ctx.save();ctx.translate(w*.5,h*.4);ctx.rotate(-.35+Math.sin(t*.015)*.1);ctx.translate(-w*.5,-h*.4);
-        const g=ctx.createLinearGradient(0,0,w,h);g.addColorStop(0,colors[0]+'00');g.addColorStop(.4,colors[i%3]+'20');g.addColorStop(1,colors[1]+'00');
-        ribbon(.25+i*.025,70+i*4,t*.05+i*.13,g);ctx.restore();
-      }
-    }
+    ctx.setTransform(dpr,0,0,dpr,0,0);window.CadenceAtmospheres.draw(ctx,w,h,motion?now/1000:24,theme);
   }
-  function animate(now) { drawAtmosphere(now); frame=requestAnimationFrame(animate); }
+  function animate(now) { drawAtmosphere(now); requestAnimationFrame(animate); }
   requestAnimationFrame(animate);
   window.addEventListener('resize',()=>{lastScene='';drawAtmosphere(0);});
   reduced.addEventListener('change',()=>apply(store.getState()));
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden){lastScene='';poll();reconcile(true);}});
+  document.addEventListener('visibilitychange',()=>{if(desktopReady)heartbeat();if(!document.hidden){lastScene='';poll();reconcile(true);}});
   window.addEventListener('online',()=>{poll();reconcile(true);});
-  window.addEventListener('pagehide',()=>{ if(token && playing) { fetch('https://api.spotify.com/v1/me/player/pause',{method:'PUT',headers:{Authorization:'Bearer '+token.access_token},keepalive:true}).catch(()=>{}); } });
+  window.addEventListener('pagehide',()=>{ if(desktopReady && desktop) fetch(BRIDGE+'/timer',{method:'POST',headers:{'Content-Type':'application/json','X-Cadence-Key':desktop.key,'X-Cadence-Client':desktop.clientId},body:JSON.stringify({allowed:false,deadline:0}),keepalive:true}).catch(()=>{}); if(token && playing) { fetch('https://api.spotify.com/v1/me/player/pause',{method:'PUT',headers:{Authorization:'Bearer '+token.access_token},keepalive:true}).catch(()=>{}); } });
   window.CadenceExperience={
     timer(next) {
       const wasFocus=timer.mode==='focus' && timer.running;
@@ -302,11 +342,12 @@
       if(!wasFocus && next.mode==='focus' && next.running) wanted=true;
       clearTimeout(deadlineId);
       if(next.running && next.mode==='focus' && next.deadline) deadlineId=setTimeout(()=>reconcile(true),Math.max(0,next.deadline-Date.now()));
+      if(desktopReady && prefs.musicSource==='desktop') heartbeat();
       reconcile(!receivedTimer);receivedTimer=true;renderPlayer();
     },
     getPreferences:()=>({...prefs})
   };
   store.subscribe(apply);apply(store.getState());
   if(window.CadenceTimerSnapshot) window.CadenceExperience.timer(window.CadenceTimerSnapshot);
-  store.ready.then(callback);
+  store.ready.then(async()=>{await callback();if(desktop && desktop.owner===account && prefs.musicSource==='desktop' && prefs.musicMode!=='off') await connectDesktop(desktop.key,false);});
 })();
