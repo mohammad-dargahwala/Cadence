@@ -46,7 +46,7 @@
       wanted = true;
     }
     document.querySelectorAll('cadence-settings').forEach(el => el.sync());
-    schedulePoll(); renderPlayer(); reconcile(); drawAtmosphere(0);
+    schedulePoll(); renderPlayer(); reconcile(); lastScene=''; drawAtmosphere();
   }
   async function accessToken() {
     if (!token) throw Error('Connect Spotify in Settings first.');
@@ -348,33 +348,35 @@
   }
   customElements.define('cadence-settings',CadenceSettings);
 
-  let lastFrame=0, lastScene='', lastPreview=0;
+  let lastScene='', lastPreview=0;
   function drawAtmosphere(now) {
     if(!window.CadenceAtmospheres) return;
     const canvas=document.getElementById('atmosphere');if(!canvas)return;
+    if(!Number.isFinite(now))now=performance.now();
     const theme=root.dataset.theme||'nebula',motion=root.dataset.motion!=='false';
     const scene=theme+innerWidth+innerHeight+prefs.background+motion+prefs.flowSpeed;
-    const artTime=motion?now/1000*Number(root.dataset.flowSpeed||1):24;
+    const artTime=window.CadenceFlow?window.CadenceFlow.time(now):24;
     if(!document.hidden && now-lastPreview>100) {
       lastPreview=now;
       document.querySelectorAll('.theme-preview[data-scene]').forEach(el=>{
         let preview=el.querySelector('canvas');
         if(!preview){preview=document.createElement('canvas');preview.setAttribute('aria-hidden','true');el.append(preview);}
         const width=Math.round(el.clientWidth),height=Math.round(el.clientHeight);if(!width||!height)return;
+        const bounds=el.getBoundingClientRect();if(bounds.bottom<0||bounds.top>innerHeight)return;
         if(preview.width!==width||preview.height!==height){preview.width=width;preview.height=height;}
         window.CadenceAtmospheres.draw(preview.getContext('2d'),width,height,artTime,el.dataset.scene);
       });
     }
-    if(!prefs.background||document.hidden||(!motion&&scene===lastScene)||(motion&&now&&now-lastFrame<33))return;
-    lastFrame=now;lastScene=scene;
+    if(!prefs.background||document.hidden||(!motion&&scene===lastScene))return;
+    lastScene=scene;
     const w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,1.5),ctx=canvas.getContext('2d');if(!ctx)return;
     if(canvas.width!==Math.round(w*dpr)||canvas.height!==Math.round(h*dpr)){canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);}
     ctx.setTransform(dpr,0,0,dpr,0,0);window.CadenceAtmospheres.draw(ctx,w,h,artTime,theme);
   }
   function animate(now) { drawAtmosphere(now); requestAnimationFrame(animate); }
   requestAnimationFrame(animate);
-  window.addEventListener('resize',()=>{lastScene='';drawAtmosphere(0);});
-  window.addEventListener('cadence-art-ready',()=>{lastScene='';drawAtmosphere(0);});
+  window.addEventListener('resize',()=>{lastScene='';drawAtmosphere();});
+  window.addEventListener('cadence-art-ready',()=>{lastScene='';drawAtmosphere();});
   reduced.addEventListener('change',()=>apply(store.getState()));
   document.addEventListener('visibilitychange',()=>{if(desktopReady)heartbeat();if(!document.hidden){lastScene='';poll();reconcile(true);}});
   window.addEventListener('online',()=>{poll();reconcile(true);});

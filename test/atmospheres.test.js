@@ -19,6 +19,9 @@ for(const id of ids){
     const first=context(),next=context();env.window.CadenceAtmospheres.draw(first,w,h,24,id);env.window.CadenceAtmospheres.draw(next,w,h,34,id);
     assert.equal(first.depth,0,'scene restores canvas state');assert(first.ops.some(op=>op[0]==='fillRect'||op[0]==='drawImage'),'scene paints its background: '+id);
     assert.notEqual(JSON.stringify(first.ops),JSON.stringify(next.ops),'time moves the scene');
+    first.ops.length=0;env.window.CadenceAtmospheres.draw(first,w,h,24+1/60,id);const adjacent=JSON.stringify(first.ops);
+    first.ops.length=0;env.window.CadenceAtmospheres.draw(first,w,h,24+2/60,id);
+    assert.notEqual(JSON.stringify(first.ops),adjacent,'adjacent display frames evolve: '+id);
     if(w===1440)signatures.push(JSON.stringify(first.ops.slice(-80)));
   }
 }

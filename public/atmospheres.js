@@ -90,10 +90,10 @@
         if(j%4===0){c.lineWidth=.55;c.strokeStyle='#fff7eb28';c.stroke();}
       }
       // Pearlescent droplets ride the pigment flow rather than floating at random.
-      for(let i=0;i<32;i++) {
-        const u=fract(i*.618+t*.018),v=Math.sin(i*19.3)*.45,p=point(u,v,river);
-        c.fillStyle=colors[i%colors.length]+'bf';c.beginPath();c.ellipse(p[0],p[1],1.5+(i%3),.65+(i%2),-.12,0,TAU);c.fill();
-      }
+      for(const drop of window.CadenceFlow.travel(c,t,'pigment:'+river,32,.012,.024)) {
+        const p=point(drop.u,(drop.x-.5)*.9,river);c.globalAlpha=drop.alpha;
+        c.fillStyle=colors[Math.floor(drop.size*colors.length)]+'bf';c.beginPath();c.ellipse(p[0],p[1],1.5+drop.size*2,.65+drop.size,-.12,0,TAU);c.fill();
+      }c.globalAlpha=1;
     }
     const hush=c.createRadialGradient(w*.5,h*.42,20,w*.5,h*.42,w*.4);hush.addColorStop(0,'#15131e5c');hush.addColorStop(1,'transparent');c.fillStyle=hush;c.fillRect(0,0,w,h);
   }

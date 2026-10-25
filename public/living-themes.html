@@ -16,11 +16,11 @@ addEventListener('DOMContentLoaded',()=>{
   }
   const visible=new Set();const observer=new IntersectionObserver(entries=>entries.forEach(e=>e.isIntersecting?visible.add(e.target):visible.delete(e.target)),{rootMargin:'150px'});container.querySelectorAll('.world').forEach(el=>observer.observe(el));
   document.getElementById('show-timer').onchange=e=>container.classList.toggle('scene-only',!e.target.checked);
-  const worlds=Array.from(document.querySelectorAll('.world'));let moving=true,t=24,last=performance.now(),lastFrame=0;
+  const worlds=Array.from(document.querySelectorAll('.world'));let moving=true;const clock=CadenceFlow.createClock();
   const button=document.getElementById('motion'),pace=document.getElementById('pace'),progress=document.getElementById('progress');
   function label(){button.textContent=moving?'Pause motion':'Resume motion';document.documentElement.dataset.motion=String(moving);}label();
   button.onclick=()=>{moving=!moving;label();};
-  function frame(now){requestAnimationFrame(frame);if(document.hidden){last=now;return;}if(now-lastFrame<33)return;lastFrame=now;const dt=Math.min(.065,(now-last)/1000);last=now;if(moving)t+=dt*Number(pace.value);
+  function frame(now){requestAnimationFrame(frame);const t=clock.sample(now,moving&&!document.hidden,Number(pace.value));if(document.hidden)return;
     const f=Number(progress.value)/100,sec=Math.round(1500*f),text=String(Math.floor(sec/60)).padStart(2,'0')+':'+String(sec%60).padStart(2,'0');document.getElementById('progress-label').textContent=progress.value+'%';
     for(const world of worlds){if(!visible.has(world))continue;const stage=world.querySelector('.stage'),bg=world.querySelector('.landscape'),dial=world.querySelector('.timer-art'),w=stage.clientWidth,h=stage.clientHeight;
       if(bg.width!==w||bg.height!==h){bg.width=w;bg.height=h;}if(dial.width!==230){dial.width=230;dial.height=230;}

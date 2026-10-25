@@ -673,13 +673,10 @@ class Component extends DCLogic {
   };
 
   /* ---------- wave canvas ---------- */
-  drawWave = () => {
+  drawWave = (now=performance.now()) => {
     const c = this.canvas = document.getElementById('waveCanvas');
     if (c && document.documentElement.dataset.wave !== 'false' && document.visibilityState === 'visible') {
       const custom = this.themes[this.state.theme].art && window.CadenceFlow;
-      const now = performance.now();
-      if (custom && this.lastArtFrame && now - this.lastArtFrame < 33) { this.raf = requestAnimationFrame(this.drawWave); return; }
-      this.lastArtFrame = now;
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       const w = c.clientWidth, h = c.clientHeight;
       if (w && (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr))) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
@@ -690,7 +687,7 @@ class Component extends DCLogic {
       const frac = Math.max(0, Math.min(1, this.state.remaining / this.total()));
       this.fillFrac = this.fillFrac == null ? frac : this.fillFrac + (frac - this.fillFrac) * .07;
       const base = h * (1 - this.fillFrac);
-      const t = document.documentElement.dataset.motion === 'false' ? 24 : performance.now() / 1000 * (Number(document.documentElement.dataset.flowSpeed) || 1);
+      const t = window.CadenceFlow ? window.CadenceFlow.time(now) : now/1000;
       if (custom) {
         window.CadenceAtmospheres.drawTimer(ctx, w, h, t, this.state.theme, this.fillFrac);
         this.raf = requestAnimationFrame(this.drawWave); return;
