@@ -100,7 +100,7 @@
     sound: true,
     volume: 0.7,
     alarmSound: 'chime',
-    theme: 'graphite',
+    theme: 'nebula',
     updatedAt: 0,
   };
 

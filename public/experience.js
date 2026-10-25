@@ -314,7 +314,7 @@
   function drawAtmosphere(now) {
     if(!window.CadenceAtmospheres) return;
     const canvas=document.getElementById('atmosphere');if(!canvas)return;
-    const theme=root.dataset.theme||'graphite',motion=root.dataset.motion!=='false';
+    const theme=root.dataset.theme||'nebula',motion=root.dataset.motion!=='false';
     const scene=theme+innerWidth+innerHeight+prefs.background+motion+prefs.flowSpeed;
     const artTime=motion?now/1000*Number(root.dataset.flowSpeed||1):24;
     if(!document.hidden && now-lastPreview>100) {
@@ -336,6 +336,7 @@
   function animate(now) { drawAtmosphere(now); requestAnimationFrame(animate); }
   requestAnimationFrame(animate);
   window.addEventListener('resize',()=>{lastScene='';drawAtmosphere(0);});
+  window.addEventListener('cadence-art-ready',()=>{lastScene='';drawAtmosphere(0);});
   reduced.addEventListener('change',()=>apply(store.getState()));
   document.addEventListener('visibilitychange',()=>{if(desktopReady)heartbeat();if(!document.hidden){lastScene='';poll();reconcile(true);}});
   window.addEventListener('online',()=>{poll();reconcile(true);});

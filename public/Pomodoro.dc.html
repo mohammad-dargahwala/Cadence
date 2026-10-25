@@ -10,6 +10,7 @@
 <script src="./analytics-core.js"></script>
 <script src="./sync.js"></script>
 <link rel="stylesheet" href="./experience.css">
+<script src="./art-worlds.js" defer></script>
 <script src="./flow-engine.js" defer></script>
 <script src="./atmospheres.js" defer></script>
 <script src="./experience.js" defer></script>
@@ -363,7 +364,7 @@ a:hover{color:var(--accent2)}
         </div>
 
         <div style="display:flex;flex-direction:column;gap:18px;padding:26px;background:var(--card);border:1px solid var(--card-b);border-radius:18px;backdrop-filter:blur(20px)">
-          <span style="font:600 14px 'Instrument Sans',sans-serif;color:var(--fg)">Appearance · eight atmospheres</span>
+          <span style="font:600 14px 'Instrument Sans',sans-serif;color:var(--fg)">Appearance · nine living worlds</span>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
             <sc-for list="{{ themeList }}" as="th" hint-placeholder-count="4">
               <button data-magnet="1" onClick="{{ th.go }}" style="display:flex;flex-direction:column;gap:12px;padding:14px;border:1.5px solid {{ th.cardB }};border-radius:15px;background:{{ th.cardBg }};text-align:left;transition:transform .25s cubic-bezier(.34,1.4,.5,1),border-color .3s" style-hover="transform:translateY(-3px)" style-active="transform:scale(.96)">
@@ -422,40 +423,15 @@ a:hover{color:var(--accent2)}
 </div>
 
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;graphite&quot;,&quot;ember&quot;,&quot;mist&quot;,&quot;clay&quot;],&quot;default&quot;:&quot;graphite&quot;,&quot;tsType&quot;:&quot;'graphite'|'ember'|'mist'|'clay'&quot;,&quot;section&quot;:&quot;Appearance&quot;},&quot;ambientMotion&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Appearance&quot;},&quot;magnetStrength&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:0.55,&quot;min&quot;:0,&quot;max&quot;:1,&quot;step&quot;:0.05,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Cursor&quot;}}">
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;nebula&quot;,&quot;horizon&quot;,&quot;valley&quot;,&quot;abyss&quot;,&quot;lantern&quot;,&quot;sakura&quot;,&quot;solstice&quot;,&quot;aurora&quot;,&quot;tidal&quot;],&quot;default&quot;:&quot;nebula&quot;,&quot;tsType&quot;:&quot;'nebula'|'horizon'|'valley'|'abyss'|'lantern'|'sakura'|'solstice'|'aurora'|'tidal'&quot;,&quot;section&quot;:&quot;Appearance&quot;},&quot;ambientMotion&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Appearance&quot;},&quot;magnetStrength&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:0.55,&quot;min&quot;:0,&quot;max&quot;:1,&quot;step&quot;:0.05,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Cursor&quot;}}">
 class Component extends DCLogic {
-  themes = {
-    aurora: {"name":"Stardust","bg":"#080f20","bg2":"#10192c","fg":"#eff9ff","fg2":"#e3e6f0b8","fg3":"#c2ccd995","card":"#10142199","cardB":"#ffffff20","pill":"#ffffff12","accent":"#dbc1f2","accent2":"#9ecbdc","btnFg":"#080f20","glow":"#b6a0d445","ring":"#dbc1f2","wave1":"#9076bd50","wave2":"#d4bda038"},
-    solstice: {"name":"Rivers of Color","bg":"#15131e","bg2":"#211d2c","fg":"#fff4e5","fg2":"#e3e6f0b8","fg3":"#c2ccd995","card":"#10142199","cardB":"#ffffff20","pill":"#ffffff12","accent":"#ffc59b","accent2":"#f38e9a","btnFg":"#22121c","glow":"#ffc59b45","ring":"#ffc59b","wave1":"#ffc59b50","wave2":"#f38e9a38"},
-    sakura: {"name":"Cherry Blossom","bg":"#f6eef3","bg2":"#fff8fb","fg":"#302336","fg2":"#514656","fg3":"#716575","card":"#ffffff9c","cardB":"#62516b26","pill":"#72607e14","accent":"#a34b73","accent2":"#8070b0","btnFg":"#fff","glow":"#a34b7345","ring":"#a34b73","wave1":"#a34b7350","wave2":"#8070b038"},
-    tidal: {"name":"Firefly Grove","bg":"#061c22","bg2":"#0c292b","fg":"#e4f9ff","fg2":"#e3e6f0b8","fg3":"#c2ccd995","card":"#10142199","cardB":"#ffffff20","pill":"#ffffff12","accent":"#b3d987","accent2":"#82c8a7","btnFg":"#061923","glow":"#9fca8745","ring":"#b3d987","wave1":"#77b49850","wave2":"#456f7750"},
-    graphite: { name: 'Graphite', bg:'#0e1013', bg2:'#15181d', card:'rgba(255,255,255,.045)', cardB:'rgba(255,255,255,.09)',
-      fg:'#f2f3f5', fg2:'rgba(242,243,245,.70)', fg3:'rgba(242,243,245,.40)', pill:'rgba(255,255,255,.09)',
-      accent:'oklch(.78 .13 165)', accent2:'oklch(.78 .13 245)', btnFg:'#0e1013',
-      glow:'oklch(.78 .13 165 / .35)', ring:'oklch(.78 .13 165 / .8)',
-      wave1:'oklch(.78 .13 165 / .38)', wave2:'oklch(.78 .13 245 / .26)' },
-    ember: { name: 'Ember', bg:'#14100e', bg2:'#1c1714', card:'rgba(255,255,255,.05)', cardB:'rgba(255,235,220,.11)',
-      fg:'#f7f1ec', fg2:'rgba(247,241,236,.70)', fg3:'rgba(247,241,236,.40)', pill:'rgba(255,235,220,.10)',
-      accent:'oklch(.76 .14 55)', accent2:'oklch(.76 .14 15)', btnFg:'#14100e',
-      glow:'oklch(.76 .14 55 / .38)', ring:'oklch(.76 .14 55 / .8)',
-      wave1:'oklch(.76 .14 55 / .40)', wave2:'oklch(.76 .14 15 / .26)' },
-    mist: { name: 'Mist', bg:'#f3f5f9', bg2:'#ffffff', card:'rgba(255,255,255,.66)', cardB:'rgba(22,32,54,.11)',
-      fg:'#141821', fg2:'rgba(20,24,33,.66)', fg3:'rgba(20,24,33,.40)', pill:'rgba(22,32,54,.07)',
-      accent:'oklch(.58 .13 265)', accent2:'oklch(.58 .13 200)', btnFg:'#ffffff',
-      glow:'oklch(.58 .13 265 / .30)', ring:'oklch(.58 .13 265 / .75)',
-      wave1:'oklch(.58 .13 265 / .30)', wave2:'oklch(.58 .13 200 / .22)' },
-    clay: { name: 'Clay', bg:'#f6f2ec', bg2:'#fffdfa', card:'rgba(255,255,255,.62)', cardB:'rgba(70,48,30,.13)',
-      fg:'#1f1a15', fg2:'rgba(31,26,21,.66)', fg3:'rgba(31,26,21,.40)', pill:'rgba(70,48,30,.08)',
-      accent:'oklch(.62 .12 45)', accent2:'oklch(.62 .12 135)', btnFg:'#fffdfa',
-      glow:'oklch(.62 .12 45 / .30)', ring:'oklch(.62 .12 45 / .75)',
-      wave1:'oklch(.62 .12 45 / .32)', wave2:'oklch(.62 .12 135 / .22)' }
-  };
+  themes = window.CadenceWorlds.themes;
 
   /* Only ephemeral view state lives here now. Tasks, settings and the whole
    * session history come from CadenceStore, which owns localStorage, the
    * cross-tab channel and the server. */
   state = {
-    view: 'timer', theme: 'graphite', mode: 'focus', running: false,
+    view: 'timer', theme: 'nebula', mode: 'focus', running: false,
     durations: { focus: 25, short: 5, long: 15 },
     remaining: 25 * 60, round: 1, autoStart: true, sound: true,
     volume: 0.7, alarmSound: 'chime', alarmActive: false, alarmTitle: '', alarmMsg: '',
@@ -476,7 +452,7 @@ class Component extends DCLogic {
   total() { const s = this.state; return this.intervalSeconds || s.durations[s.mode] * 60; }
 
   componentDidMount() {
-    const p = this.props.theme;
+    const p = window.CadenceWorlds.resolve(this.props.theme);
     if (p && this.themes[p]) this.setState({ theme: p });
     this.applyTheme(p && this.themes[p] ? p : this.state.theme);
 
@@ -565,9 +541,10 @@ class Component extends DCLogic {
     if (typeof cfg.sound === 'boolean') patch.sound = cfg.sound;
     if (typeof cfg.volume === 'number' && !this.dragging) patch.volume = Math.max(0, Math.min(1, cfg.volume));
     if (cfg.alarmSound && this.alarmDefs.some(([id]) => id === cfg.alarmSound)) patch.alarmSound = cfg.alarmSound;
-    if (cfg.theme && this.themes[cfg.theme] && cfg.theme !== this.state.theme) {
-      patch.theme = cfg.theme;
-      this.applyTheme(cfg.theme);
+    const selectedTheme = window.CadenceWorlds.resolve(cfg.theme || this.state.theme);
+    if (selectedTheme !== this.state.theme) {
+      patch.theme = selectedTheme;
+      this.applyTheme(selectedTheme);
     }
     if (identityChanged) Object.assign(patch, { running: false, mode: 'focus', round: 1, remaining: (cfg.durations || this.state.durations).focus * 60 });
     this.setState(patch, () => { if (identityChanged && st.user) this.restoreTimer(); });
@@ -684,7 +661,7 @@ class Component extends DCLogic {
   drawWave = () => {
     const c = this.canvas = document.getElementById('waveCanvas');
     if (c && document.documentElement.dataset.wave !== 'false' && document.visibilityState === 'visible') {
-      const custom = ['aurora','solstice','sakura','tidal'].includes(this.state.theme) && window.CadenceFlow;
+      const custom = this.themes[this.state.theme].art && window.CadenceFlow;
       const now = performance.now();
       if (custom && this.lastArtFrame && now - this.lastArtFrame < 33) { this.raf = requestAnimationFrame(this.drawWave); return; }
       this.lastArtFrame = now;
@@ -961,6 +938,7 @@ class Component extends DCLogic {
   setView = (v) => () => { this.setState({ view: v, themeMenuOpen: false }); this.pop(600, .05, 'sine', .035); };
   toggleThemeMenu = () => this.setState(s => ({ themeMenuOpen: !s.themeMenuOpen }));
   setTheme = (id) => () => {
+    id = window.CadenceWorlds.resolve(id);
     this.setState({ theme: id, themeMenuOpen: false }, () => this.persistSettings());
     this.applyTheme(id);
     this.pop(700, .07, 'sine', .04);
@@ -968,6 +946,7 @@ class Component extends DCLogic {
   };
 
   applyTheme(id) {
+    id = window.CadenceWorlds.resolve(id);
     const t = this.themes[id], r = document.documentElement.style;
     const map = { '--bg':t.bg, '--bg2':t.bg2, '--card':t.card, '--card-b':t.cardB, '--fg':t.fg, '--fg2':t.fg2,
       '--fg3':t.fg3, '--pill':t.pill, '--accent':t.accent, '--accent2':t.accent2, '--glow':t.glow, '--ring':t.ring, '--btn-fg':t.btnFg };
@@ -975,7 +954,7 @@ class Component extends DCLogic {
     document.body.style.background = t.bg;
     document.documentElement.dataset.theme = id;
     const face = document.querySelector('.timer-face');
-    if (face && !['aurora','solstice','sakura','tidal'].includes(id)) face.style.borderRadius = '50%';
+    if (face) face.style.borderRadius = '50%';
   }
 
   /* ---------- sliders ---------- */

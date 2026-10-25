@@ -27,6 +27,20 @@ html[data-motion=false] *,html[data-motion=false] *:before,html[data-motion=fals
 [data-theme=tidal] .timer-face{background:#103128bf!important;border-color:#b7d89e55!important;box-shadow:0 30px 90px -35px #72b48a70,inset 0 2px 0 #d7f7b821!important}
 [data-theme=tidal] .timer-numerals{font-family:'Instrument Sans',sans-serif!important;font-size:76px!important;font-weight:500!important;letter-spacing:-.04em!important;color:#e9f4d9!important;text-shadow:0 0 24px #a7d89d33}
 .timer-ink{z-index:1;pointer-events:none}
+[data-theme=nebula] .timer-face{background:#16162edb!important;border-color:#ceaffc66!important;box-shadow:0 0 90px -10px #9b63c873,inset 0 0 40px #ba99f321!important}
+[data-theme=nebula] .timer-numerals{font-family:'Instrument Sans',sans-serif!important;font-weight:500!important;letter-spacing:-.055em!important;color:#f6eaff!important;text-shadow:0 0 30px #cfb3ff75}
+[data-theme=horizon] .timer-face{background:#040509!important;border-color:#e4b16b5c!important;box-shadow:0 0 0 7px #edb46f09,0 0 70px #f3a34535,inset 0 0 40px #000!important}
+[data-theme=horizon] .timer-numerals{font-family:'IBM Plex Mono',monospace!important;font-size:67px!important;font-weight:400!important;letter-spacing:-.07em!important;color:#ffedcb!important;text-shadow:0 0 23px #edb87a42}
+[data-theme=horizon] .timer-mode,[data-theme=horizon] .timer-status{color:#efcf9ebf!important}
+[data-theme=valley] .timer-face{background:#eee6d4!important;border-color:#f6edc8a1!important;box-shadow:0 30px 85px -35px #39483e70,inset 0 1px 2px #fff9e9!important}
+[data-theme=valley] .timer-numerals{font:italic 400 80px/1 Georgia,serif!important;letter-spacing:-.055em!important;color:#424934!important;text-shadow:0 1px 16px #fff9d5}
+[data-theme=valley] .timer-mode,[data-theme=valley] .timer-status{color:#5e614b!important}
+[data-theme=abyss] .timer-face{background:#123d4dd1!important;border-color:#a5dcd96b!important;box-shadow:0 0 90px -15px #62c8ce52,inset 0 1px 10px #b0f4ec21!important}
+[data-theme=abyss] .timer-numerals{font-family:'Instrument Sans',sans-serif!important;font-weight:400!important;letter-spacing:-.055em!important;color:#dffaf2!important;text-shadow:0 0 22px #a3f4e94d}
+[data-theme=abyss] .timer-mode,[data-theme=abyss] .timer-status{color:#c8ece2b8!important}
+[data-theme=lantern] .timer-face{background:#e9b082!important;border-color:#f9d2a096!important;box-shadow:0 15px 100px -10px #f9b65a52,inset 0 1px 0 #ffe9c4!important}
+[data-theme=lantern] .timer-numerals{font:400 76px/1 Georgia,serif!important;letter-spacing:-.055em!important;color:#5f3740!important}
+[data-theme=lantern] .timer-mode,[data-theme=lantern] .timer-status{color:#78444ccf!important}
 .desktop-setup[hidden],.web-setup[hidden]{display:none!important}
 .desktop-setup a.ex-button{display:inline-block;text-decoration:none}
 cadence-settings{display:block;grid-column:1/-1}

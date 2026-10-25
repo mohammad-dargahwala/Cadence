@@ -72,7 +72,7 @@
       const canvas=document.createElement('canvas'),gl=canvas.getContext('webgl',{alpha:false,antialias:false,preserveDrawingBuffer:false});if(!gl){failed=true;return null;}
       const vertex='attribute vec2 p;varying vec2 uv;void main(){uv=p*.5+.5;gl_Position=vec4(p,0.,1.);}';
       const fragment=`precision highp float;
-        varying vec2 uv;uniform float time;uniform vec2 size;uniform float bubble;
+        varying vec2 uv;uniform float time;uniform vec2 size;uniform float bubble;uniform float nebula;
         float hash(vec3 p){p=fract(p*.3183099+vec3(.11,.27,.39));p*=17.;return fract(p.x*p.y*p.z*(p.x+p.y+p.z));}
         float noise(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
           return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);}
@@ -94,29 +94,42 @@
           vec2 center=(uv-.5)*vec2(size.x/size.y,1.);
           float calm=1.-smoothstep(.10,.50,length(center));
           color=mix(color,vec3(.075,.055,.11),calm*(bubble>.5?.53:.38));
+          if(nebula>.5){
+            float cloud=fbm(vec3(p*1.12+4.2*r,t*.17));
+            float ridge=1.-abs(cloud*2.-1.);
+            float smoke=pow(smoothstep(.20,.83,cloud),1.7);
+            vec3 gas=mix(vec3(.10,.055,.24),vec3(.69,.25,.52),smoothstep(.30,.72,q.x));
+            gas=mix(gas,vec3(.18,.68,.73),smoothstep(.33,.72,r.y));
+            gas=mix(gas,vec3(.88,.65,.86),pow(ridge,12.)*.46);
+            float dust=fbm(vec3(p*3.8+6.*q,t*.22));
+            color=vec3(.025,.035,.095)+gas*smoke*1.6;
+            color*=.62+.48*dust;
+            color+=vec3(.24,.17,.37)*pow(ridge,9.)*.20;
+          }
           gl_FragColor=vec4(color,1.);
         }`;
       function shader(type,source){const s=gl.createShader(type);gl.shaderSource(s,source);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error('Fluid shader could not compile.');return s;}
       const program=gl.createProgram();gl.attachShader(program,shader(gl.VERTEX_SHADER,vertex));gl.attachShader(program,shader(gl.FRAGMENT_SHADER,fragment));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error('Fluid shader could not link.');
       gl.useProgram(program);const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
       const p=gl.getAttribLocation(program,'p');gl.enableVertexAttribArray(p);gl.vertexAttribPointer(p,2,gl.FLOAT,false,0,0);
-      gpu={canvas,gl,program,time:gl.getUniformLocation(program,'time'),size:gl.getUniformLocation(program,'size'),bubble:gl.getUniformLocation(program,'bubble')};
+      gpu={canvas,gl,program,time:gl.getUniformLocation(program,'time'),size:gl.getUniformLocation(program,'size'),bubble:gl.getUniformLocation(program,'bubble'),nebula:gl.getUniformLocation(program,'nebula')};
       canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();gpu=null;failed=true;});
       return gpu;
     }catch{failed=true;return null;}
   }
-  function paint(c,w,h,t,bubble=false){
+  function paint(c,w,h,t,bubble=false,flavor='paint'){
       const surface=fluidSurface();if(!surface)return false;
-    if(c.canvas&&c.canvas.dataset)c.canvas.dataset.renderer='fluid';
+    if(c.canvas&&c.canvas.dataset)c.canvas.dataset.renderer=flavor==='nebula'?'nebula-gas':'fluid';
     const {canvas,gl}=surface,scale=Math.min(1,950/w,620/h),rw=Math.max(2,Math.round(w*scale)),rh=Math.max(2,Math.round(h*scale));
     if(canvas.width!==rw||canvas.height!==rh){canvas.width=rw;canvas.height=rh;}
-    gl.viewport(0,0,rw,rh);gl.useProgram(surface.program);gl.uniform1f(surface.time,t);gl.uniform2f(surface.size,w,h);gl.uniform1f(surface.bubble,bubble?1:0);gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+    gl.viewport(0,0,rw,rh);gl.useProgram(surface.program);gl.uniform1f(surface.time,t);gl.uniform2f(surface.size,w,h);gl.uniform1f(surface.bubble,bubble?1:0);gl.uniform1f(surface.nebula,flavor==='nebula'?1:0);gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
     c.drawImage(canvas,0,0,w,h);return true;
   }
   function ring(c,w,h,frac,color,offset=0){
     c.save();c.translate(w*.5,h*.5);c.rotate(offset);c.strokeStyle=color;c.lineWidth=1.6;c.beginPath();c.arc(0,0,w*.465,-Math.PI*.5,-Math.PI*.5+TAU*frac);c.stroke();c.restore();
   }
   function timer(c,w,h,t,id,fraction){
+    if(window.CadenceWorlds && window.CadenceWorlds.timer(c,w,h,t,id,fraction))return;
     const f=clamp(fraction,0,1);c.save();c.clearRect(0,0,w,h);
     const face=c.canvas&&c.canvas.parentElement;
     if(face){

@@ -102,13 +102,15 @@ function harness(transport='web',reduceMotion=false) {
   const code=html.match(/<script type="text\/x-dc"[^>]*>([\s\S]*?)<\/script>/)[1];
   const saved=new Map(), logged=[], timers=new Map();let clock=5000000,index=0;
   class Logic{constructor(){this.props={};}setState(patch,fn){Object.assign(this.state,typeof patch==='function'?patch(this.state):patch);if(fn)fn();}}
+  const worldEnv={window:{}};vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../public/art-worlds.js'),'utf8'),worldEnv);
   const Component=vm.runInNewContext(code+'; Component',{DCLogic:Logic,crypto:crypto.webcrypto,console,
     Date:class extends Date{static now(){return clock;}},localStorage:{getItem:k=>saved.get(k),setItem:(k,v)=>saved.set(k,v)},
-    document:{documentElement:{style:{setProperty(){}},dataset:{}},body:{style:{}}},window:{},
+    document:{documentElement:{style:{setProperty(){}},dataset:{}},body:{style:{}},querySelector:()=>null},window:worldEnv.window,
     setInterval:()=>++index,clearInterval(){},setTimeout:(fn)=>{timers.set(++index,fn);return index;},clearTimeout:id=>timers.delete(id)});
   const c=new Component();c.pop=()=>{};c.toast=()=>{};c.startAlarm=()=>{};
-  c.store={logSession:e=>logged.push(e),getState:()=>({sessions:[]})};c.state.user='Tester';c.TIMER_KEY='timer-a';
-  assert.equal(Object.keys(c.themes).length,8,'eight themes available');
+  c.store={logSession:e=>logged.push(e),getState:()=>({sessions:[]}),saveSettings(){}};c.state.user='Tester';c.TIMER_KEY='timer-a';
+  assert.equal(Object.keys(c.themes).length,9,'nine worlds available');
+  c.setTheme('clay')();assert.equal(c.state.theme,'valley','retired selection resolves to a painted world');c.setTheme('nebula')();
   c.setRunning(true);clock+=1499700;c.tick();assert.equal(c.state.remaining,1,'timer never finishes half a second early');clock+=300;c.tick();assert.equal(c.state.mode,'short');assert.equal(logged[0].seconds,1500);
   c.setMode('long')();assert.equal(c.renderVals().runLabel,'Start break','break action uses correct label');
   c.setMode('focus')();c.setRunning(true);c.state.durations.focus=40;assert.equal(c.total(),1500,'editing preferences does not change an active interval length');c.setRunning(false);c.reset();assert.equal(c.total(),2400,'reset adopts the new interval preference');

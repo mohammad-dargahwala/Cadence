@@ -16,16 +16,23 @@ Analytics count focus intervals with at least a minute recorded, including ones 
 
 ## Themes and minimalist settings
 
-Four animated scenes join the original Graphite, Ember, Mist and Clay themes:
+Nine named worlds, each with its own moving artwork and countdown dial:
 
-- **Cherry Blossom** — a branching cherry tree with blossoms carried along curved wind streams.
-- **Rivers of Color** — moving veins of paint that fold into marbled currents.
-- **Stardust** — hundreds of particles following braided paths around a star vortex.
-- **Firefly Grove** — layered woodland silhouettes and fireflies drifting through the mist.
+- **Nebula Bloom** — evolving violet and turquoise gas clouds and a luminous starlit lens.
+- **Event Horizon** — an incandescent accretion disk, a bent halo and a dark timekeeping core.
+- **Painted Valley** — oil-brushed mountains, soft Gaussian mist and flowing water, with a warm landscape medallion.
+- **Abyssal Ballet** — translucent jellyfish with independently moving tentacles, and a glowing bell-shaped dial.
+- **Lantern Drift** — rising paper lanterns over a twilight lake and a warm ribbed paper timer.
+- **Cherry Blossom** — wind-carried petals and a blossom lens.
+- **Rivers of Color** — evolving marbled pigment and a morphing paint droplet.
+- **Stardust** — integrated particle trails and precessing orbital rings.
+- **Firefly Grove** — layered woodland and a glass fern terrarium.
 
-The artwork is drawn locally on a canvas, including the previews in Settings. Minimalist settings control backgrounds, movement, the timer wave, cursor effects, round/task details and interface sounds. Flow mode runs continuously, including while the countdown is paused. Choose Gentle, Fluid or Expressive pace. The separate Follow system reduced motion option can honor your device preference; turning Flowing motion off always freezes a complete still composition. The scenes are original code, with visual inspiration from [Refik Anadol’s fluid pigments](https://refikanadol.com/works/unsupervised/) and [teamLab’s nature and particle installations](https://www.teamlab.art/).
+The old Graphite, Ember, Mist and Clay selections are retired. Saved Graphite maps to Nebula Bloom, Ember to Lantern Drift, and Mist/Clay to Painted Valley. Existing animated selections stay intact.
 
-Each of the four custom themes also has a matching timer: a rotating blossom lens, a morphing marbled paint droplet, a precessing orbital dial, or a glass firefly terrarium. Their artwork responds to countdown progress. Rivers of Color uses a changing domain-warped pigment field, with a moving canvas fallback; petals, stars and fireflies retain their positions and integrate through migrating vortices rather than replaying a fixed path. Settings links to a music-free live gallery at `/living-themes.html`, with motion/pacing controls and a countdown scrubber.
+The scenes use local canvas artwork, evolving GPU gas/pigment fields and canvas fallbacks. Painted Valley layers moving mist, light and water over a bundled oil painting created with the built-in image generation tool; its prompt is in `public/art/README.md`. Minimalist settings control backgrounds, motion, timer artwork, cursor effects, details and sounds. Flow mode runs while the timer is idle. Choose Gentle, Fluid or Expressive pace, pause it explicitly, or enable Follow system reduced motion. Settings links to a music-free gallery at `/living-themes.html`, with a scene-only view and countdown scrubber. Only visible gallery scenes animate.
+
+Visual references include [NASA's black hole accretion disk visualization](https://svs.gsfc.nasa.gov/13326/), [Webb's Cosmic Cliffs](https://esawebb.org/images/weic2205a/), and [Cézanne's mountain/valley oil painting at the Met](https://www.metmuseum.org/art/collection/search/435877). These inform the original generated compositions; no reference images or videos are embedded. The black hole is an artistic interpretation. Earlier scenes take inspiration from [Refik Anadol](https://refikanadol.com/works/unsupervised/) and [teamLab](https://www.teamlab.art/).
 
 ## Spotify
 
