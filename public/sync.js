@@ -100,6 +100,9 @@
     sound: true,
     volume: 0.7,
     alarmSound: 'chime',
+    alarmDuration: 0,
+    musicAlarmDuration: 3,
+    alarmRepeat: 4,
     theme: 'nebula',
     updatedAt: 0,
   };

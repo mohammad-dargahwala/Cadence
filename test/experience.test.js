@@ -8,7 +8,7 @@ const path = require('node:path');
 const source = fs.readFileSync(path.join(__dirname,'../public/experience.js'),'utf8');
 const flush = async () => { for(let i=0;i<12;i++) await new Promise(setImmediate); };
 function harness(transport='web',reduceMotion=false) {
-  let now=1000000, sequence=0, pendingPlay, nativePlaying=false;
+  let now=1000000, sequence=0, pendingPlay, nativePlaying=false, helperUp=true;
   const callbacks=new Map(), intervals=new Map(), requests=[], listeners={}, data=new Map();
   const state={workspaceId:'account-a',user:'Tester',settings:{experience:{musicMode:'full',musicSource:transport}}};
   if(transport==='desktop') data.set('cadence.desktop.pair',JSON.stringify({owner:'account-a',key:'q'.repeat(32),clientId:'a'.repeat(32)}));
@@ -33,6 +33,7 @@ function harness(transport='web',reduceMotion=false) {
       const body=opts.body?JSON.parse(opts.body):null;
       requests.push({url,method:opts.method||'GET',body});
       if(url.startsWith('http://127.0.0.1:17842')) {
+        if(url.endsWith('/health')){if(!helperUp)throw Error('Failed to fetch');return {ok:true,json:async()=>({ok:true,service:'cadence-desktop'})};}
         if(url.endsWith('/timer')) nativePlaying=body.allowed && body.deadline>now;
         if(url.endsWith('/command') && body.action==='pause')nativePlaying=false;
         if(url.endsWith('/command') && body.action==='play')nativePlaying=true;
@@ -48,6 +49,8 @@ function harness(transport='web',reduceMotion=false) {
     timer(next){context.window.CadenceExperience.timer({signedIn:true,running:true,mode:'focus',remaining:60,deadline:now+60000,view:'timer',alarm:false,...next});},
     setNow(v){now=v;},now:()=>now,
     setNativePlaying(v){nativePlaying=v;},
+    setHelperUp(v){helperUp=v;},
+    visibility(){listeners.visibilitychange();},
     holdPlay(){return new Promise(resolve=>{let release;pendingPlay=new Promise(r=>release=r);resolve(release);});}
   };
 }
@@ -92,6 +95,12 @@ function harness(transport='web',reduceMotion=false) {
   const beforeManual=native.requests.length;native.setNativePlaying(true);
   [...native.intervals.values()][0]();await flush();
   assert.equal(native.requests.slice(beforeManual).some(r=>r.url.endsWith('/command')&&r.body.action==='pause'),false,'idle metadata polling does not fight manual desktop playback');
+  const beforeProbe=native.requests.length;assert(await native.context.window.CadenceExperience.checkDesktopHelper());native.setHelperUp(false);assert.equal(await native.context.window.CadenceExperience.checkDesktopHelper(),false);
+  assert(native.requests.slice(beforeProbe).every(r=>r.method==='GET'&&r.url.endsWith('/health')),'helper readiness never pairs or controls media');
+  const boundary=harness('desktop');await flush();boundary.timer();await flush();assert(boundary.context.window.CadenceExperience.musicWasPlaying());
+  boundary.setNow(boundary.now()+60000);boundary.setNativePlaying(false);boundary.visibility();await flush();
+  assert(boundary.context.window.CadenceExperience.musicWasPlaying(),'alarm remembers playback before the native deadline pause');
+  boundary.timer({mode:'short',running:false,deadline:0});await flush();assert.equal(boundary.context.window.CadenceExperience.musicWasPlaying(),false,'break state does not retain stale focus playback');
 
   const race=harness();await flush();const release=await race.holdPlay();race.timer();await flush();race.timer({mode:'short'});await flush();assert(race.requests.at(-1).url.endsWith('/pause'),'break pause does not wait for an in-flight resume');release();await flush();
   assert(race.requests.at(-1).url.endsWith('/pause'),'late resume response cannot leave a break playing');
@@ -103,6 +112,7 @@ function harness(transport='web',reduceMotion=false) {
   const saved=new Map(), logged=[], timers=new Map();let clock=5000000,index=0;
   class Logic{constructor(){this.props={};}setState(patch,fn){Object.assign(this.state,typeof patch==='function'?patch(this.state):patch);if(fn)fn();}}
   const worldEnv={window:{}};vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../public/art-worlds.js'),'utf8'),worldEnv);
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../public/alarm-audio.js'),'utf8'),worldEnv);
   const Component=vm.runInNewContext(code+'; Component',{DCLogic:Logic,crypto:crypto.webcrypto,console,
     Date:class extends Date{static now(){return clock;}},localStorage:{getItem:k=>saved.get(k),setItem:(k,v)=>saved.set(k,v)},
     document:{documentElement:{style:{setProperty(){}},dataset:{}},body:{style:{}},querySelector:()=>null},window:worldEnv.window,
@@ -114,7 +124,7 @@ function harness(transport='web',reduceMotion=false) {
   c.setRunning(true);clock+=1499700;c.tick();assert.equal(c.state.remaining,1,'timer never finishes half a second early');clock+=300;c.tick();assert.equal(c.state.mode,'short');assert.equal(logged[0].seconds,1500);
   c.setMode('long')();assert.equal(c.renderVals().runLabel,'Start break','break action uses correct label');
   c.setMode('focus')();c.setRunning(true);c.state.durations.focus=40;assert.equal(c.total(),1500,'editing preferences does not change an active interval length');c.setRunning(false);c.reset();assert.equal(c.total(),2400,'reset adopts the new interval preference');
-  c.state.alarmSound='bell';c.playAlarmOnce();assert.equal(c.alarmNotes.length,3);c.stopAlarm();assert.equal(timers.size,0,'alarm dismissal cancels pending notes');
+  c.state.alarmActive=true;c.state.alarmSounding=true;let stopped=0;c.alarmVoices=[{stop(){stopped++}}];c.stopAlarm();assert.equal(stopped,1,'dismissal stops active voices');assert.equal(c.state.alarmSounding,false);assert.equal(timers.size,0,'alarm dismissal cancels pending notes');
   c.state.running=true;c.onStoreChange({user:'Other',workspaceId:'other',settings:{durations:{focus:30,short:5,long:15}}});assert.equal(c.state.running,false,'new account never inherits active timer');assert.equal(c.state.remaining,1800);assert.equal(c.TIMER_KEY,'cadence.timer.other');
   console.log('Experience and timer regressions passed: focus/break/pause/alarm/deadline, playback races, manual pause, display modes, sign-out, themes, countdown rounding, account isolation, and alarm cancellation.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

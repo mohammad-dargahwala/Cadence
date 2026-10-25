@@ -11,6 +11,8 @@
   const put = (key, value) => { try { value === null ? sessionStorage.removeItem(key) : sessionStorage.setItem(key, JSON.stringify(value)); } catch {} };
   const BRIDGE='http://127.0.0.1:17842';
   let desktop=get('cadence.desktop.pair',null), desktopReady=false, heartbeatId, desktopControls={};
+  let focusPlayback={deadline:0,playing:false};
+  function rememberPlayback(value){playing=!!value;if(timer.mode==='focus' && timer.running && timer.deadline>Date.now())focusPlayback={deadline:timer.deadline,playing};}
   const connected=()=>prefs.musicSource==='desktop'?desktopReady:!!token;
   const allowed = () => timer.signedIn && timer.running && timer.mode === 'focus' && !timer.alarm && timer.remaining > 0 && (!timer.deadline || Date.now() < timer.deadline) && prefs.musicMode !== 'off';
   const active = () => connected() && timer.signedIn && prefs.musicMode !== 'off';
@@ -23,6 +25,7 @@
       if(previousSource==='desktop' && desktopReady) bridge('/timer',{allowed:false,deadline:0}).catch(()=>{});
       if(previousSource==='web' && token) fetch('https://api.spotify.com/v1/me/player/pause',{method:'PUT',headers:{Authorization:'Bearer '+token.access_token},keepalive:true}).catch(()=>{});
       playing=false;
+      focusPlayback={deadline:0,playing:false};
     }
     for (const key of ['background','wave','details','clickSounds']) root.dataset[key] = String(prefs[key]);
     root.dataset.cursor = String(prefs.cursor && matchMedia('(pointer:fine)').matches);
@@ -33,6 +36,7 @@
       desktopReady=false;
       if (token && playing) fetch('https://api.spotify.com/v1/me/player/pause',{method:'PUT',headers:{Authorization:'Bearer '+token.access_token},keepalive:true}).catch(()=>{});
       token = null; track = null; playing = false;
+      focusPlayback={deadline:0,playing:false};
       account = st.workspaceId;
       if(desktop && desktop.owner!==account){desktop=null;put('cadence.desktop.pair',null);}
       const saved = get('cadence.spotify.tokens', null);
@@ -81,14 +85,14 @@
     if (!yes) {
       if(prefs.musicSource==='desktop' && !previouslyAllowed) return;
       // Pause immediately, even if a preceding resume request is still pending.
-      api('/pause','PUT').then(()=>{playing=false;renderPlayer();updateMessage('Music paused · focus periods only.');}).catch(e=>updateMessage(e.message));
+      api('/pause','PUT').then(()=>{rememberPlayback(false);renderPlayer();updateMessage('Music paused · focus periods only.');}).catch(e=>updateMessage(e.message));
       return;
     }
     enqueue(async () => {
       if (!active()) return;
       const play = allowed() && wanted;
       await api(play ? '/play' : '/pause','PUT',()=>active() && (play ? allowed() && wanted : !allowed() || !wanted));
-      playing = play && allowed();
+      rememberPlayback(play && allowed());
       // A focus interval may have ended while a resume request was in flight.
       if (play && !allowed()) { await api('/pause','PUT'); playing=false; }
       updateMessage(allowed() ? (wanted ? 'Music follows your focus timer.' : 'Music paused for this focus block.') : 'Music paused · focus periods only.');
@@ -101,7 +105,7 @@
       const owner = account;
       const data = await api('');
       if (owner !== account || !active()) return;
-      track = data && data.item || null; playing=!!(data && data.is_playing);
+      track = data && data.item || null; rememberPlayback(data && data.is_playing);
       if (playing && !allowed() && prefs.musicSource!=='desktop') reconcile(true);
       if (playing && !allowed() && prefs.musicSource==='desktop') updateMessage('Timer idle · desktop playback is under your control.');
       if (!track) updateMessage('Open Spotify and select a song on the device you want to use.');
@@ -120,6 +124,17 @@
     const data=await r.json();
     if(!r.ok) throw Error(data.error||'Desktop helper could not complete that action.');
     return data;
+  }
+  async function checkDesktopHelper(){
+    try {
+      const r=await fetch(BRIDGE+'/health',{signal:AbortSignal.timeout(3500)});const data=await r.json();
+      if(!r.ok || !data.ok || data.service!=='cadence-desktop')throw Error('not-ready');
+      document.querySelectorAll('.open-desktop').forEach(el=>el.hidden=false);
+      document.querySelectorAll('.desktop-health').forEach(el=>el.textContent='Helper is ready. Open the pairing page, copy its code, then connect below.');return true;
+    }catch{
+      document.querySelectorAll('.open-desktop').forEach(el=>el.hidden=true);
+      document.querySelectorAll('.desktop-health').forEach(el=>el.textContent='Helper is not reachable. Download the ZIP, extract all files, and run Start-Cadence-Desktop.cmd first. The launcher waits for startup and shows a diagnostic error if it fails. Then choose Check helper again.');return false;
+    }
   }
   async function heartbeat() {
     if(!desktopReady || prefs.musicSource!=='desktop') return;
@@ -149,7 +164,7 @@
       const data=await bridge('/pair',{},credentials);
       desktop=credentials;desktopReady=true;put('cadence.desktop.pair',desktop);
       save({musicSource:'desktop',musicMode:activate && prefs.musicMode==='off'?'full':prefs.musicMode});
-      const state=desktopState(data);track=state&&state.item;playing=!!(state&&state.is_playing);
+      const state=desktopState(data);track=state&&state.item;rememberPlayback(state&&state.is_playing);
       updateMessage('Desktop connected · no Premium needed. Music follows your focus timer.');
       schedulePoll();await heartbeat();reconcile(true);renderPlayer();
       document.querySelectorAll('cadence-settings').forEach(el=>{el.sync();const keyInput=el.querySelector('.desktop-key');if(keyInput)keyInput.value='';});
@@ -245,7 +260,7 @@
         if(!allowed()) return;
         wanted=!playing;
         await api(wanted?'/play':'/pause','PUT',()=>active() && (!wanted || allowed()));
-        playing=wanted && allowed();
+        rememberPlayback(wanted && allowed());
         if(wanted && !allowed()) await api('/pause','PUT');
       } else if(action==='next'||action==='previous') {
         await api('/'+action,'POST',active);
@@ -266,9 +281,10 @@
       sourceLabel.innerHTML='<span>Connect through</span><select data-pref="musicSource"><option value="desktop">Windows desktop · Free</option><option value="web">Spotify Web API · Premium</option></select>';
       musicCard.insertBefore(sourceLabel,musicCard.querySelector('.ex-row'));
       const desktopSetup=document.createElement('div');desktopSetup.className='desktop-setup ex-setup';
-      desktopSetup.innerHTML='<h3 style="font-size:13px;margin:0 0 8px">Desktop connection · no Premium needed</h3><p>Use Spotify on this Windows PC. Download and unzip the helper, then double-click Start-Cadence-Desktop.cmd. It runs in the background and opens a page with your pairing code.</p><a class="ex-button" href="/desktop/Cadence-Desktop.zip" download>Download desktop helper</a><ol><li>Start the helper and copy its pairing code.</li><li>Paste it below and connect. Allow local-network access if your browser asks.</li><li>Choose a song in Spotify, then start a focus interval.</li></ol><label>Pairing code<input type="text" class="desktop-key" placeholder="Code from the desktop helper" autocomplete="off" spellcheck="false"></label><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="ex-button primary connect-desktop">Connect desktop</button><a class="ex-button" href="http://127.0.0.1:17842/" target="_blank" rel="noopener">Open helper</a></div><p style="margin-top:12px">Only Spotify is controlled. If the tab closes or loses contact, the helper pauses music on tab close or within 90 seconds of losing contact. Spotify’s ad and playback restrictions still apply; unavailable controls stay disabled.</p>';
+      desktopSetup.innerHTML='<h3 style="font-size:13px;margin:0 0 8px">Desktop connection · no Premium needed</h3><p>Use Spotify on this Windows PC. Download and unzip the helper, then double-click Start-Cadence-Desktop.cmd. The launcher waits until the helper is ready before opening its pairing page. Keep it running while you use Cadence.</p><a class="ex-button" href="/desktop/Cadence-Desktop.zip" download>Download desktop helper</a><ol><li>Extract every file and run Start-Cadence-Desktop.cmd. Wait for its ready page, or read the startup error shown by the launcher.</li><li>Choose Check helper below, then open the pairing page and copy its code.</li><li>Paste it below and connect. Allow local-network access if your browser asks.</li><li>Choose a song in Spotify, then start a focus interval.</li></ol><p class="desktop-health" role="status">The helper must be running on this computer before its local page can open.</p><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><button class="ex-button check-desktop">Check helper</button><a class="ex-button open-desktop" href="http://127.0.0.1:17842/" target="_blank" rel="noopener" hidden>Open pairing page</a></div><label>Pairing code<input type="text" class="desktop-key" placeholder="Code from the desktop helper" autocomplete="off" spellcheck="false"></label><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="ex-button primary connect-desktop">Connect desktop</button></div><p style="margin-top:12px">Only Spotify is controlled. If the tab closes or loses contact, the helper pauses music on tab close or within 90 seconds of losing contact. Spotify’s ad and playback restrictions still apply; unavailable controls stay disabled.</p>';
       musicCard.insertBefore(desktopSetup,musicCard.querySelector('details'));
       this.querySelector('details').classList.add('web-setup');
+      this.querySelector('.check-desktop').onclick=()=>checkDesktopHelper();
       this.querySelector('.connect-desktop').onclick=()=>connectDesktop(this.querySelector('.desktop-key').value.trim());
       const pace=document.createElement('label');pace.className='ex-row';pace.innerHTML='<span>Flow pace<small>Continuous evolution, even while the timer is paused.</small></span><select data-pref="flowSpeed"><option value="0.55">Gentle</option><option value="1">Fluid</option><option value="1.65">Expressive</option></select>';
       this.querySelector('.visual-toggles').after(pace);
@@ -342,6 +358,8 @@
   window.addEventListener('online',()=>{poll();reconcile(true);});
   window.addEventListener('pagehide',()=>{ if(desktopReady && desktop) fetch(BRIDGE+'/timer',{method:'POST',headers:{'Content-Type':'application/json','X-Cadence-Key':desktop.key,'X-Cadence-Client':desktop.clientId},body:JSON.stringify({allowed:false,deadline:0}),keepalive:true}).catch(()=>{}); if(token && playing) { fetch('https://api.spotify.com/v1/me/player/pause',{method:'PUT',headers:{Authorization:'Bearer '+token.access_token},keepalive:true}).catch(()=>{}); } });
   window.CadenceExperience={
+    musicWasPlaying:()=>active() && (playing || (timer.mode==='focus' && timer.running && focusPlayback.deadline===timer.deadline && focusPlayback.playing)),
+    checkDesktopHelper,
     timer(next) {
       const wasFocus=timer.mode==='focus' && timer.running;
       timer=next;

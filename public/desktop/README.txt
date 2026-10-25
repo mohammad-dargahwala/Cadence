@@ -2,14 +2,15 @@ Cadence Desktop — Windows Spotify controls
 
 1. Keep these files together in one folder.
 2. Double-click Start-Cadence-Desktop.cmd.
-3. The helper runs hidden in the background. Its local page opens with a pairing code.
-4. In Cadence Settings, choose Spotify > Windows desktop, paste that code, and connect.
+3. The helper runs hidden. The launcher checks readiness for up to 20 seconds, then opens its pairing page.
+   If startup fails, it keeps the error visible and gives a diagnostic log path instead of opening a broken page.
+4. In Cadence Settings, choose Spotify > Windows desktop > Check helper, then open the pairing page, paste its code, and connect.
 5. Select a song in the Spotify desktop app and start a focus timer in Cadence.
 
 No Spotify developer account, Premium subscription, third-party libraries, admin rights,
 startup task, or Spotify password is needed. Uses Windows PowerShell 5.1 and the
 Windows media session API. If Windows blocks a downloaded script, review it and use
-the file's Properties > Unblock option yourself; do not change machine-wide policy.
+the ZIP's Properties > Unblock option yourself before extracting; do not change machine-wide policy.
 If the launcher does not start, run this from its folder to see the error:
   powershell.exe -NoProfile -File .\Cadence-Desktop.ps1
 
@@ -29,3 +30,7 @@ are disabled; no restrictions are bypassed.
 
 To stop: open http://127.0.0.1:17842/ and click Stop helper.
 Start it again after restarting Windows. It does not install itself at login.
+
+A connection-refused page at 127.0.0.1:17842 means the helper is not listening.
+It cannot start just by opening that address. Run the launcher first.
+The read-only /health endpoint confirms readiness without pairing or media commands.

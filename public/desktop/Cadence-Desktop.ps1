@@ -120,6 +120,9 @@ try {
 "@
         Reply $stream 200 $page '' 'text/html';continue
       }
+      if($method -eq 'GET' -and $route -eq '/health'){
+        Reply $stream 200 '{"ok":true,"service":"cadence-desktop","version":2}' $origin;continue
+      }
       if($method -eq 'OPTIONS'){if(-not $origin){Reply $stream 403 '{}'}else{Reply $stream 204 '' $origin};continue}
       $length=0;if($headers.ContainsKey('content-length')){if(-not [int]::TryParse($headers['content-length'],[ref]$length) -or $length -lt 0 -or $length -gt 8192){throw 'Invalid body length.'}}
       if($headers.ContainsKey('transfer-encoding')){throw 'Transfer encoding is unsupported.'}

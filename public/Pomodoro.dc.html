@@ -7,6 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="./vendor-map.js"></script>
 <script src="./art-worlds.js"></script>
+<script src="./alarm-audio.js"></script>
 <script src="./support.js"></script>
 <script src="./analytics-core.js"></script>
 <script src="./sync.js"></script>
@@ -329,8 +330,8 @@ a:hover{color:var(--accent2)}
             </div>
             <div style="display:flex;align-items:center;justify-content:space-between;gap:20px">
               <div style="display:flex;flex-direction:column;gap:3px">
-                <span style="font:500 13px 'Instrument Sans',sans-serif;color:var(--fg)">Audio feedback</span>
-                <span style="font:400 11.5px 'Instrument Sans',sans-serif;color:var(--fg3)">Synthesized pops on clicks and transitions</span>
+                <span style="font:500 13px 'Instrument Sans',sans-serif;color:var(--fg)">Sound enabled</span>
+                <span style="font:400 11.5px 'Instrument Sans',sans-serif;color:var(--fg3)">Completion alarms and interface sounds</span>
               </div>
               <button data-magnet="1" onClick="{{ toggleSound }}" style="position:relative;width:50px;height:28px;flex:none;border:1px solid var(--card-b);border-radius:999px;background:{{ soundBg }};transition:background .3s" style-active="transform:scale(.94)">
                 <span style="position:absolute;top:3px;left:{{ soundX }}px;width:20px;height:20px;border-radius:999px;background:{{ soundKnob }};transition:left .34s cubic-bezier(.34,1.56,.64,1)"></span>
@@ -360,6 +361,12 @@ a:hover{color:var(--accent2)}
                 <button data-magnet="1" onClick="{{ al.go }}" style="height:34px;padding:0 16px;border:1px solid {{ al.b }};border-radius:11px;background:{{ al.bg }};color:{{ al.c }};font:500 12.5px 'Instrument Sans',sans-serif;transition:all .25s cubic-bezier(.34,1.56,.64,1)" style-active="transform:scale(.94)">{{ al.label }}</button>
               </sc-for>
             </div>
+          </div>
+          <div class="alarm-settings">
+            <label>Alarm duration <span>0 = until dismissed</span><input aria-label="Alarm duration in seconds" type="number" min="0" max="120" step="1" value="{{ alarmDuration }}" onChange="{{ setAlarmDuration }}"></label>
+            <label>When music is playing <span>seconds · defaults to 3</span><input aria-label="Alarm duration with music in seconds" type="number" min="1" max="30" step="1" value="{{ musicAlarmDuration }}" onChange="{{ setMusicAlarmDuration }}"></label>
+            <label>Repeat interval <span>seconds between phrases</span><input aria-label="Alarm repeat interval in seconds" type="number" min="3" max="15" step="1" value="{{ alarmRepeat }}" onChange="{{ setAlarmRepeat }}"></label>
+            <p>The music limit uses playback at the end of the interval, before Spotify pauses for the break. The notice stays available after the sound ends.</p>
           </div>
         </div>
 
@@ -415,7 +422,8 @@ a:hover{color:var(--accent2)}
           <span style="font:600 19px 'Instrument Sans',sans-serif;letter-spacing:-.01em;color:var(--fg)">{{ alarmTitle }}</span>
           <span style="font:400 13px/1.6 'Instrument Sans',sans-serif;color:var(--fg2)">{{ alarmMsg }}</span>
         </div>
-        <button data-magnet="1" onClick="{{ stopAlarm }}" style="height:52px;width:100%;border:0;border-radius:16px;background:var(--accent);color:var(--btn-fg);font:600 14.5px 'Instrument Sans',sans-serif;letter-spacing:-.01em;box-shadow:0 16px 34px -12px var(--glow);transition:transform .22s cubic-bezier(.34,1.56,.64,1)" style-hover="transform:translateY(-2px) scale(1.02)" style-active="transform:scale(.93)">Stop alarm</button>
+        <span class="alarm-countdown" role="status">{{ alarmCountdown }}</span>
+        <button data-magnet="1" onClick="{{ stopAlarm }}" style="height:52px;width:100%;border:0;border-radius:16px;background:var(--accent);color:var(--btn-fg);font:600 14.5px 'Instrument Sans',sans-serif;letter-spacing:-.01em;box-shadow:0 16px 34px -12px var(--glow);transition:transform .22s cubic-bezier(.34,1.56,.64,1)" style-hover="transform:translateY(-2px) scale(1.02)" style-active="transform:scale(.93)">{{ alarmDismissLabel }}</button>
       </div>
     </div>
   </sc-if>
@@ -434,7 +442,8 @@ class Component extends DCLogic {
     view: 'timer', theme: 'nebula', mode: 'focus', running: false,
     durations: { focus: 25, short: 5, long: 15 },
     remaining: 25 * 60, round: 1, autoStart: true, sound: true,
-    volume: 0.7, alarmSound: 'chime', alarmActive: false, alarmTitle: '', alarmMsg: '',
+    volume: 0.7, alarmSound: 'chime', alarmDuration:0, musicAlarmDuration:3, alarmRepeat:4,
+    alarmActive: false, alarmSounding:false, alarmLeft:0, alarmTitle: '', alarmMsg: '',
     themeMenuOpen: false, newTask: '', toasts: [],
     tasks: [], analytics: null,
     /* Sign-in screen. `user` null means signed out, which is what gates the
@@ -445,7 +454,7 @@ class Component extends DCLogic {
 
   tabDefs = [ ['timer','Timer'], ['stats','Analytics'], ['tasks','Tasks'], ['settings','Settings'] ];
   modeDefs = [ ['focus','Focus'], ['short','Short break'], ['long','Long break'] ];
-  alarmDefs = [ ['chime','Chime'], ['bell','Classical'], ['digital','Siren'], ['none','None'] ];
+  alarmDefs = window.CadenceAlarm.sounds;
 
   TIMER_KEY = 'cadence.timer';
 
@@ -480,9 +489,10 @@ class Component extends DCLogic {
   }
 
   componentDidUpdate() {
+    if(this.state.alarmSounding && (!this.state.sound || this.state.volume<=0 || this.state.alarmSound==='none')){this.silenceAlarm();return;}
     window.CadenceTimerSnapshot = {
       mode: this.state.mode, running: this.state.running, signedIn: !!this.state.user,
-      alarm: this.state.alarmActive, remaining: this.state.remaining, deadline: this.deadline || 0,
+      alarm: this.state.alarmSounding, remaining: this.state.remaining, deadline: this.deadline || 0,
       view: this.state.view
     };
     if (window.CadenceExperience) window.CadenceExperience.timer(window.CadenceTimerSnapshot);
@@ -491,7 +501,7 @@ class Component extends DCLogic {
   componentWillUnmount() {
     cancelAnimationFrame(this.raf); cancelAnimationFrame(this.craf);
     clearInterval(this.timer);
-    clearTimeout(this.alarmTimer);
+    this.stopAlarm();
     window.removeEventListener('pointermove', this.onMove);
     window.removeEventListener('pointerdown', this.onDown);
     window.removeEventListener('pointerup', this.onUp);
@@ -541,6 +551,9 @@ class Component extends DCLogic {
     if (typeof cfg.sound === 'boolean') patch.sound = cfg.sound;
     if (typeof cfg.volume === 'number' && !this.dragging) patch.volume = Math.max(0, Math.min(1, cfg.volume));
     if (cfg.alarmSound && this.alarmDefs.some(([id]) => id === cfg.alarmSound)) patch.alarmSound = cfg.alarmSound;
+    for (const [key,min,max,fallback] of [['alarmDuration',0,120,0],['musicAlarmDuration',1,30,3],['alarmRepeat',3,15,4]]) {
+      if (cfg[key] != null || identityChanged) patch[key] = Math.max(min,Math.min(max,Number(cfg[key])||fallback));
+    }
     const selectedTheme = window.CadenceWorlds.resolve(cfg.theme || this.state.theme);
     if (selectedTheme !== this.state.theme) {
       patch.theme = selectedTheme;
@@ -555,7 +568,8 @@ class Component extends DCLogic {
     const s = this.state;
     this.store.saveSettings({
       durations: s.durations, autoStart: s.autoStart, sound: s.sound, theme: s.theme,
-      volume: s.volume, alarmSound: s.alarmSound
+      volume: s.volume, alarmSound: s.alarmSound, alarmDuration:s.alarmDuration,
+      musicAlarmDuration:s.musicAlarmDuration, alarmRepeat:s.alarmRepeat
     });
   }
 
@@ -608,6 +622,7 @@ class Component extends DCLogic {
   }
 
   onVisibility = () => {
+    if(this.alarmEnd && Date.now()>=this.alarmEnd)this.silenceAlarm();
     if (document.visibilityState === 'visible' && this.state.running) this.tick();
   };
 
@@ -615,7 +630,7 @@ class Component extends DCLogic {
   onMove = (e) => { this.mouse = { x: e.clientX, y: e.clientY }; };
   onDown = () => { this.down = true; };
   onUp = () => { this.down = false; };
-  onAnyClick = () => { this.pop(520, .05, 'triangle', .035); };
+  onAnyClick = () => {if(this.alarmEnd && Date.now()>=this.alarmEnd)this.silenceAlarm();if(this.state.sound){try{this.audioContext();}catch{}}this.pop(520, .05, 'triangle', .035);};
 
   magnetFor(x, y) {
     const els = document.querySelectorAll('[data-magnet]');
@@ -735,68 +750,62 @@ class Component extends DCLogic {
     this.playTone(freq, dur, type, peak);
   }
 
-  /* The alarm itself is deliberately louder and scales much harder with the
-   * volume slider — 100% is meant to read as genuinely loud, not a slightly
-   * louder chime. */
-  alarmTone(freq, dur, type, gain) {
-    if (!this.state.sound || this.state.volume <= 0) return;
-    const peak = (gain == null ? .3 : gain) * (0.18 + this.state.volume * 4.9);
-    this.playTone(freq, dur, type, peak);
-  }
-
-  /* One repetition of the chosen alarm's phrase. Three distinct characters:
-   * a mild, floating chime; a mellow classical-style arpeggio; and a jolting,
-   * blaring siren for when "loud" needs to mean loud. */
-  playAlarmOnce = () => {
-    switch (this.state.alarmSound) {
-      case 'none': return;
-      case 'bell': // classical — a slow, mellow four-note arpeggio
-        this.alarmTone(523.25, .55, 'triangle', .3);
-        this.queueAlarmTone(() => this.alarmTone(659.25, .55, 'triangle', .28), 260);
-        this.queueAlarmTone(() => this.alarmTone(783.99, .6, 'triangle', .28), 520);
-        this.queueAlarmTone(() => this.alarmTone(1046.5, .95, 'triangle', .32), 800);
-        return;
-      case 'digital': // siren — fast, jolting alarm-clock beeps
-        this.alarmTone(1200, .12, 'square', .36);
-        this.queueAlarmTone(() => this.alarmTone(1200, .12, 'square', .36), 160);
-        this.queueAlarmTone(() => this.alarmTone(1200, .16, 'square', .38), 320);
-        this.queueAlarmTone(() => this.alarmTone(1200, .2, 'square', .4), 480);
-        return;
-      default: // chime — soft, mild, unhurried
-        this.alarmTone(660, .4, 'sine', .24);
-        this.queueAlarmTone(() => this.alarmTone(880, .55, 'sine', .2), 240);
+  audioContext() {
+    if (!this.ac) {
+      const Audio = window.AudioContext || window.webkitAudioContext;if(!Audio)return null;
+      this.ac = new Audio();this.limiter = this.ac.createDynamicsCompressor();
+      this.limiter.threshold.setValueAtTime(-10,this.ac.currentTime);this.limiter.knee.setValueAtTime(12,this.ac.currentTime);
+      this.limiter.ratio.setValueAtTime(6,this.ac.currentTime);this.limiter.attack.setValueAtTime(.003,this.ac.currentTime);
+      this.limiter.release.setValueAtTime(.2,this.ac.currentTime);this.limiter.connect(this.ac.destination);
     }
+    if(this.ac.state==='suspended')this.ac.resume().catch(()=>{});return this.ac;
+  }
+
+  playAlarmOnce = (limit=Infinity) => {
+    if(!this.state.sound || this.state.volume<=0 || this.state.alarmSound==='none')return;
+    try {
+      const ac=this.audioContext();if(!ac)return;
+      this.alarmVoices=(this.alarmVoices||[]).filter(v=>v.end>ac.currentTime);
+      const voice=window.CadenceAlarm.play(ac,this.limiter,this.state.alarmSound,{volume:this.state.volume,limit});
+      if(voice)this.alarmVoices.push(voice);
+    }catch{}
   };
 
-  /* Gap between repetitions of each phrase — short and frequent for the
-   * jolting siren, long and unhurried for the mild chime. */
-  ALARM_GAP = { chime: 1700, bell: 2600, digital: 900 };
-
-  /* Keeps sounding the chosen alarm on a loop until `stopAlarm` is called —
-   * intentionally: a single chime is easy to miss, so the alarm now behaves
-   * like one, and the popup is the one way to silence it. */
-  startAlarm() {
-    if (this.alarmTimer || this.state.alarmSound === 'none') return;
-    this.setState({ alarmActive: true });
-    const tick = () => {
-      this.playAlarmOnce();
-      this.alarmTimer = setTimeout(tick, this.ALARM_GAP[this.state.alarmSound] || 1700);
+  startAlarm(musicWasPlaying=false) {
+    this.silenceAlarm();this.alarmStarted=Date.now();this.alarmHadMusic=musicWasPlaying;
+    const duration=window.CadenceAlarm.duration(this.state,musicWasPlaying);
+    this.alarmEnd=duration?this.alarmStarted+duration*1000:0;
+    const audible=this.state.sound && this.state.volume>0 && this.state.alarmSound!=='none';
+    this.setState({alarmActive:true,alarmSounding:audible,alarmLeft:duration});if(!audible)return;
+    const phrase=()=>{
+      const left=this.alarmEnd?(this.alarmEnd-Date.now())/1000:Infinity;
+      if(left<=0 || !this.state.alarmSounding){this.silenceAlarm();return;}
+      this.playAlarmOnce(left);this.alarmTimer=setTimeout(phrase,this.state.alarmRepeat*1000);
     };
-    tick();
+    const countdown=()=>{
+      if(!this.state.alarmSounding)return;
+      if(window.CadenceExperience && window.CadenceExperience.musicWasPlaying())this.alarmHadMusic=true;
+      const seconds=window.CadenceAlarm.duration(this.state,this.alarmHadMusic),end=seconds?this.alarmStarted+seconds*1000:0;
+      if(end && (!this.alarmEnd || end<this.alarmEnd)){
+        this.alarmEnd=end;(this.alarmVoices||[]).forEach(v=>v.cutOff(Math.max(0,(end-Date.now())/1000)));
+        clearTimeout(this.alarmStopTimer);this.alarmStopTimer=setTimeout(()=>this.silenceAlarm(),Math.max(0,end-Date.now()));
+      }
+      if(this.alarmEnd && Date.now()>=this.alarmEnd){this.silenceAlarm();return;}
+      const left=this.alarmEnd?Math.ceil((this.alarmEnd-Date.now())/1000):0;
+      if(left!==this.state.alarmLeft)this.setState({alarmLeft:left});
+      this.alarmCountdownTimer=setTimeout(countdown,100);
+    };
+    if(this.alarmEnd)this.alarmStopTimer=setTimeout(()=>this.silenceAlarm(),Math.max(0,this.alarmEnd-Date.now()));
+    phrase();countdown();
   }
 
-  queueAlarmTone(fn, delay) {
-    if (!this.alarmNotes) this.alarmNotes = [];
-    this.alarmNotes.push(setTimeout(fn, delay));
-  }
-
-  stopAlarm = () => {
-    (this.alarmNotes || []).forEach(clearTimeout);
-    this.alarmNotes = [];
-    clearTimeout(this.alarmTimer);
-    this.alarmTimer = null;
-    if (this.state.alarmActive) this.setState({ alarmActive: false });
+  silenceAlarm = () => {
+    clearTimeout(this.alarmTimer);clearTimeout(this.alarmStopTimer);clearTimeout(this.alarmCountdownTimer);
+    this.alarmTimer=null;this.alarmStopTimer=null;this.alarmCountdownTimer=null;
+    (this.alarmVoices||[]).forEach(v=>v.stop());this.alarmVoices=[];
+    if(this.state.alarmSounding || this.state.alarmLeft)this.setState({alarmSounding:false,alarmLeft:0});
   };
+  stopAlarm = () => {this.silenceAlarm();if(this.state.alarmActive)this.setState({alarmActive:false});};
 
   /* ---------- toasts ---------- */
   toast(title, msg) {
@@ -896,6 +905,7 @@ class Component extends DCLogic {
 
   complete(skipped) {
     const s = this.state;
+    const musicWasPlaying = !!(window.CadenceExperience && window.CadenceExperience.musicWasPlaying());
     const left = s.running && this.deadline ? Math.max(0, Math.ceil((this.deadline - Date.now()) / 1000)) : s.remaining;
     const elapsed = Math.max(0, this.total() - left);
     this.logInterval(elapsed);
@@ -915,7 +925,7 @@ class Component extends DCLogic {
     const detail = 'Now: ' + this.modeName(mode) + ' · ' + s.durations[mode] + ' min';
     if (!skipped) {
       this.setState({ alarmTitle: headline, alarmMsg: detail });
-      this.startAlarm();
+      this.startAlarm(musicWasPlaying);
     } else {
       this.pop(380, .08, 'triangle', .04);
     }
@@ -992,7 +1002,7 @@ class Component extends DCLogic {
   toggleSound = () => {
     const v = !this.state.sound;
     this.setState({ sound: v }, () => { this.persistSettings(); if (v) this.pop(740, .09, 'sine', .05); });
-    this.toast('Audio feedback', v ? 'On' : 'Off');
+    this.toast('Sound', v ? 'On' : 'Off');
   };
 
   dragVolume = (e) => {
@@ -1015,9 +1025,13 @@ class Component extends DCLogic {
   };
 
   setAlarmSound = (id) => () => {
-    this.setState({ alarmSound: id }, () => { this.persistSettings(); this.playAlarmOnce(); });
+    this.stopAlarm();this.setState({ alarmSound: id }, () => this.persistSettings());
   };
-  previewAlarm = () => this.playAlarmOnce();
+  previewAlarm = () => {this.silenceAlarm();this.playAlarmOnce(3);};
+  setAlarmNumber = (key,min,max,fallback) => (e) => {
+    const value=Math.max(min,Math.min(max,Math.round(Number(e.target.value)||fallback)));
+    this.setState({[key]:value},()=>this.persistSettings());
+  };
 
   /* ---------- sign in ---------- */
 
@@ -1230,6 +1244,10 @@ class Component extends DCLogic {
       toggleAuto: this.toggleAuto, toggleSound: this.toggleSound,
       volumePct: Math.round(s.volume * 100), dragVolume: this.dragVolume,
       previewAlarm: this.previewAlarm,
+      alarmDuration:s.alarmDuration, musicAlarmDuration:s.musicAlarmDuration, alarmRepeat:s.alarmRepeat,
+      setAlarmDuration:this.setAlarmNumber('alarmDuration',0,120,0),
+      setMusicAlarmDuration:this.setAlarmNumber('musicAlarmDuration',1,30,3),
+      setAlarmRepeat:this.setAlarmNumber('alarmRepeat',3,15,4),
       alarmSounds: this.alarmDefs.map(([id, label]) => {
         const on = id === s.alarmSound;
         return { id, label, bg: on ? th.pill : 'transparent', c: on ? th.fg : th.fg3, b: on ? th.accent : th.cardB, go: this.setAlarmSound(id) };
@@ -1237,7 +1255,9 @@ class Component extends DCLogic {
       toggleThemeMenu: this.toggleThemeMenu,
       toasts: s.toasts,
 
-      alarmActive: s.alarmActive, alarmTitle: s.alarmTitle, alarmMsg: s.alarmMsg, stopAlarm: this.stopAlarm
+      alarmActive: s.alarmActive, alarmTitle: s.alarmTitle, alarmMsg: s.alarmMsg, stopAlarm: this.stopAlarm,
+      alarmCountdown:this.state.alarmSounding ? (s.alarmLeft ? 'Sound stops in '+s.alarmLeft+'s' : 'Sound repeats until dismissed') : 'Sound finished',
+      alarmDismissLabel:s.alarmSounding?'Stop alarm':'Dismiss'
     };
   }
 }

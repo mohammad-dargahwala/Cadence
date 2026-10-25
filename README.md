@@ -34,6 +34,12 @@ The scenes use local canvas artwork, evolving GPU gas/pigment fields and canvas 
 
 Visual references include [NASA's black hole accretion disk visualization](https://svs.gsfc.nasa.gov/13326/), [Webb's Cosmic Cliffs](https://esawebb.org/images/weic2205a/), and [Cézanne's mountain/valley oil painting at the Met](https://www.metmuseum.org/art/collection/search/435877). These inform the original generated compositions; no reference images or videos are embedded. The black hole is an artistic interpretation. Earlier scenes take inspiration from [Refik Anadol](https://refikanadol.com/works/unsupervised/) and [teamLab](https://www.teamlab.art/).
 
+## Alarm sounds
+
+Choose Glass chimes, Warm piano, Singing bowl, Harp cascade, Water droplets, Soft pulse or Silent. They use layered instruments with soft attacks and bounded echo tails, rather than a loud square-wave siren. Selecting a sound is silent; Preview plays one phrase, limited to three seconds.
+
+Settings includes the normal alarm duration (0 means until dismissed), the duration when music was playing (3 seconds by default), and the interval between repeated phrases. Cadence captures music playback before the focus-to-break pause. Scheduled audio stops at the cap even if a browser timer is late. The alarm notice shows a sound countdown and remains available after the sound finishes. See the [Web Audio scheduling reference](https://developer.mozilla.org/en-US/docs/Web/API/AudioScheduledSourceNode/stop).
+
 ## Spotify
 
 ### Windows desktop: works with Spotify Free

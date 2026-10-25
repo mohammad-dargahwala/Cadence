@@ -8,7 +8,7 @@
     "deploy": "wrangler deploy",
     "db:migrate:local": "wrangler d1 migrations apply cadence --local",
     "db:migrate:remote": "wrangler d1 migrations apply cadence --remote",
-    "test": "node test/analytics.test.js && node test/atmospheres.test.js && node test/experience.test.js && node test/api.test.js",
+    "test": "node test/analytics.test.js && node test/atmospheres.test.js && node test/alarm.test.js && node test/experience.test.js && node test/api.test.js",
     "test:desktop": "node test/desktop-bridge.test.cjs"
   },
   "license": "MIT",

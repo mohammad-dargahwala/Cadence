@@ -15,6 +15,12 @@ html[data-motion=false] *,html[data-motion=false] *:before,html[data-motion=fals
 .theme-preview canvas{position:absolute;inset:0;width:100%;height:100%;z-index:1}.theme-preview:has(canvas):after{display:none}
 .timer-face{backdrop-filter:blur(14px)}
 .timer-numerals{font-variant-numeric:tabular-nums}
+.alarm-settings{display:grid;gap:12px;border-top:1px solid var(--card-b);padding-top:18px}
+.alarm-settings label{display:grid;grid-template-columns:1fr 70px;gap:3px 12px;align-items:center;font-size:12px;color:var(--fg)}
+.alarm-settings label span{font-size:10px;color:var(--fg2);grid-column:1}
+.alarm-settings input{grid-column:2;grid-row:1/3;width:70px;background:var(--bg2);color:var(--fg);border:1px solid var(--card-b);border-radius:9px;padding:9px;font:12px 'IBM Plex Mono',monospace}
+.alarm-settings p{margin:0;font-size:11px;line-height:1.6;color:var(--fg2)}
+.alarm-countdown{font:12px 'IBM Plex Mono',monospace;color:var(--accent);min-height:16px}
 [data-theme=sakura] .timer-face{background:#fff4efb8!important;border-color:#bb82a959!important;box-shadow:0 30px 90px -35px #9c557852,inset 0 1px 0 #fff!important}
 [data-theme=sakura] .timer-numerals{font:italic 400 80px/1 Georgia,serif!important;letter-spacing:-.055em!important;color:#593047!important}
 [data-theme=sakura] .timer-mode{color:#956783!important}
@@ -43,6 +49,7 @@ html[data-motion=false] *,html[data-motion=false] *:before,html[data-motion=fals
 [data-theme=lantern] .timer-mode,[data-theme=lantern] .timer-status{color:#78444ccf!important}
 .desktop-setup[hidden],.web-setup[hidden]{display:none!important}
 .desktop-setup a.ex-button{display:inline-block;text-decoration:none}
+.desktop-setup .open-desktop[hidden]{display:none!important}
 cadence-settings{display:block;grid-column:1/-1}
 .experience-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .ex-card{padding:26px;border:1px solid var(--card-b);border-radius:18px;background:var(--card);backdrop-filter:blur(24px);color:var(--fg)}
