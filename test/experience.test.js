@@ -7,7 +7,7 @@ const crypto = require('node:crypto');
 const path = require('node:path');
 const source = fs.readFileSync(path.join(__dirname,'../public/experience.js'),'utf8');
 const flush = async () => { for(let i=0;i<12;i++) await new Promise(setImmediate); };
-function harness(transport='web') {
+function harness(transport='web',reduceMotion=false) {
   let now=1000000, sequence=0, pendingPlay, nativePlaying=false;
   const callbacks=new Map(), intervals=new Map(), requests=[], listeners={}, data=new Map();
   const state={workspaceId:'account-a',user:'Tester',settings:{experience:{musicMode:'full',musicSource:transport}}};
@@ -26,7 +26,7 @@ function harness(transport='web') {
   const body=new Element(), root=new Element();
   const document={documentElement:root,body,hidden:false,querySelectorAll:()=>[],getElementById:()=>null,createElement:()=>new Element(),addEventListener:(k,fn)=>listeners[k]=fn};
   const store={getState:()=>state,subscribe(fn){this.subscriber=fn;},ready:Promise.resolve(),saveSettings(patch){Object.assign(state.settings,patch);this.subscriber(state);}};
-  const context={document,HTMLElement:Element,customElements:{define(){}},matchMedia:()=>({matches:false,addEventListener(){}}),location:{search:'',origin:'https://cadence.test'},history:{replaceState(){}},crypto:crypto.webcrypto,TextEncoder,URLSearchParams,
+  const context={document,HTMLElement:Element,customElements:{define(){}},matchMedia:query=>({matches:query.includes('prefers-reduced-motion')&&reduceMotion,addEventListener(){}}),location:{search:'',origin:'https://cadence.test'},history:{replaceState(){}},crypto:crypto.webcrypto,TextEncoder,URLSearchParams,
     AbortSignal,localStorage:{setItem(){},getItem(){return null;}},sessionStorage:{getItem:k=>data.get(k),setItem:(k,v)=>data.set(k,v),removeItem:k=>data.delete(k)},
     Date:class extends Date {static now(){return now;}},setTimeout(fn,delay){const id=++sequence;callbacks.set(id,{fn,delay});return id;},clearTimeout:id=>callbacks.delete(id),setInterval(fn){const id=++sequence;intervals.set(id,fn);return id;},clearInterval:id=>intervals.delete(id),requestAnimationFrame(){return 1;},
     fetch:async(url,opts={})=>{
@@ -75,6 +75,10 @@ function harness(transport='web') {
   const before=h.requests.length;h.timer({mode:'long'});await flush();assert.equal(h.requests.length,before,'off makes no playback commands');
   h.store.saveSettings({experience:{musicSource:'web',musicMode:'full',background:false,wave:false,details:false,motion:false}});
   assert.equal(h.root.dataset.background,'false');assert.equal(h.root.dataset.motion,'false');assert.equal(h.root.dataset.wave,'false');
+  const motion=harness('web',true);await flush();
+  assert.equal(motion.root.dataset.motion,'true','requested Flow mode can run despite a system reduced-motion preference');
+  motion.store.saveSettings({experience:{motion:true,followSystemMotion:true}});assert.equal(motion.root.dataset.motion,'false','Follow system honors reduced motion');
+  motion.store.saveSettings({experience:{motion:false,followSystemMotion:false}});assert.equal(motion.root.dataset.motion,'false','explicit pause always stops motion');
 
   const native=harness('desktop');await flush();native.timer();await flush();
   assert(native.requests.some(r=>r.url.endsWith('/command')&&r.body.action==='play'),'desktop focus sends an explicit play command');

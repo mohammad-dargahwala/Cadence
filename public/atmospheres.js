@@ -152,9 +152,38 @@
     const colors=id==='ember'?['#d98044','#bd5264']:id==='clay'?['#ba8466','#a7ba8b']:id==='mist'?['#83a7de','#a1c8cb']:['#50b99d','#5b88ca'];
     glow(c,w*(.18+Math.sin(t*.02)*.05),h*.2,w*.6,colors[0]+'28');glow(c,w*.85,h*.75,w*.5,colors[1]+'24');
   }
+  function livingCherry(c,w,h,t){
+    const sky=c.createLinearGradient(0,0,w,h);sky.addColorStop(0,'#f4e3ea');sky.addColorStop(.6,'#f7eeeb');sky.addColorStop(1,'#e2dfed');c.fillStyle=sky;c.fillRect(0,0,w,h);
+    glow(c,w*(.75+Math.sin(t*.09)*.13),h*.24,w*.45,'#fff8e699');
+    c.save();c.transform(1,0,Math.sin(t*.43)*.009+Math.cos(t*.19)*.005,1,-Math.sin(t*.43)*h*.006,0);
+    c.drawImage(layer('tree',w,h,ctx=>blossomTree(ctx,w,h)),0,0);c.restore();
+    window.CadenceFlow.particles(c,w,h,t,'petals');
+  }
+  function filaments(c,w,h,t,kind){
+    for(let i=0;i<11;i++){
+      let x=.05+(i%4)*.29,y=.1+Math.floor(i/4)*.31;
+      c.strokeStyle=kind==='stars'?'#b3acff15':'#c3df9c12';c.lineWidth=.7;c.beginPath();c.moveTo(x*w,y*h);
+      for(let j=0;j<85;j++){const v=window.CadenceFlow.field(x,y,t,kind);x+=v[0]*.004;y+=v[1]*.004;c.lineTo(x*w,y*h);}c.stroke();
+    }
+  }
+  function livingStars(c,w,h,t){
+    c.fillStyle='#090d1b';c.fillRect(0,0,w,h);
+    glow(c,w*(.3+Math.sin(t*.07)*.18),h*(.5+Math.cos(t*.11)*.12),w*.52,'#67529b38');
+    glow(c,w*(.7+Math.cos(t*.051)*.19),h*.34,w*.45,'#276d8540');
+    filaments(c,w,h,t,'stars');window.CadenceFlow.particles(c,w,h,t,'stars');
+  }
+  function livingForest(c,w,h,t){
+    c.fillStyle='#061c22';c.fillRect(0,0,w,h);glow(c,w*(.7+Math.sin(t*.08)*.17),h*.14,w*.6,'#326a6547');
+    c.save();c.globalAlpha=.6;c.translate(Math.sin(t*.16)*3,0);c.drawImage(layer('forest',w,h,ctx=>forestLayer(ctx,w,h)),0,0);c.restore();
+    filaments(c,w,h,t,'fireflies');window.CadenceFlow.particles(c,w,h,t,'fireflies');
+    glow(c,w*(.2+Math.sin(t*.12)*.13),h*.95,w*.6,'#608f722b');
+  }
   window.CadenceAtmospheres={draw(c,w,h,t,id){
+    if(c.canvas&&c.canvas.dataset)c.canvas.dataset.artTime=t.toFixed(3);
     c.save();c.clearRect(0,0,w,h);
-    if(id==='sakura')cherry(c,w,h,t);else if(id==='solstice')paintRiver(c,w,h,t);else if(id==='aurora')stars(c,w,h,t);else if(id==='tidal')fireflies(c,w,h,t);else classic(c,w,h,t,id);
+    if(window.CadenceFlow){
+      if(id==='sakura')livingCherry(c,w,h,t);else if(id==='solstice'){if(!window.CadenceFlow.paint(c,w,h,t)){paintRiver(c,w,h,t*4);window.CadenceFlow.particles(c,w,h,t,'paint');}}else if(id==='aurora')livingStars(c,w,h,t);else if(id==='tidal')livingForest(c,w,h,t);else classic(c,w,h,t,id);
+    }else if(id==='sakura')cherry(c,w,h,t);else if(id==='solstice')paintRiver(c,w,h,t);else if(id==='aurora')stars(c,w,h,t);else if(id==='tidal')fireflies(c,w,h,t);else classic(c,w,h,t,id);
     c.restore();
-  }};
+  },drawTimer(c,w,h,t,id,fraction){if(c.canvas&&c.canvas.dataset)c.canvas.dataset.artTime=t.toFixed(3);if(window.CadenceFlow)window.CadenceFlow.timer(c,w,h,t,id,fraction);}};
 })();

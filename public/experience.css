@@ -14,6 +14,19 @@ html[data-motion=false] *,html[data-motion=false] *:before,html[data-motion=fals
 .theme-preview:after{content:'';position:absolute;width:110%;height:90%;border-radius:50%;border:1px solid #ffffff42;left:-5%;top:45%;transform:rotate(-14deg);box-shadow:0 8px 0 #ffffff0b,0 16px 0 #ffffff0b,0 24px 0 #ffffff0b}
 .theme-preview canvas{position:absolute;inset:0;width:100%;height:100%;z-index:1}.theme-preview:has(canvas):after{display:none}
 .timer-face{backdrop-filter:blur(14px)}
+.timer-numerals{font-variant-numeric:tabular-nums}
+[data-theme=sakura] .timer-face{background:#fff4efb8!important;border-color:#bb82a959!important;box-shadow:0 30px 90px -35px #9c557852,inset 0 1px 0 #fff!important}
+[data-theme=sakura] .timer-numerals{font:italic 400 80px/1 Georgia,serif!important;letter-spacing:-.055em!important;color:#593047!important}
+[data-theme=sakura] .timer-mode{color:#956783!important}
+[data-theme=sakura] .timer-status{color:#775569!important}
+[data-theme=solstice] .timer-face{background:#20172b!important;border-color:#ffe4d354!important;box-shadow:0 28px 100px -32px #c5799d80,inset 0 2px 0 #fff3!important}
+[data-theme=solstice] .timer-numerals{font-family:'Instrument Sans',sans-serif!important;font-weight:600!important;letter-spacing:-.05em!important;text-shadow:0 2px 20px #100a24}
+[data-theme=solstice] .timer-mode,[data-theme=solstice] .timer-status{color:#f7e3dacc!important;text-shadow:0 1px 8px #100a24}
+[data-theme=aurora] .timer-face{background:#0a1021b8!important;border-color:#d7c8ff38!important;box-shadow:0 0 70px -8px #8368bd40,inset 0 0 40px #a09cdb15!important}
+[data-theme=aurora] .timer-numerals{font-size:70px!important;letter-spacing:-.025em!important;text-shadow:0 0 24px #ba9efc66}
+[data-theme=tidal] .timer-face{background:#103128bf!important;border-color:#b7d89e55!important;box-shadow:0 30px 90px -35px #72b48a70,inset 0 2px 0 #d7f7b821!important}
+[data-theme=tidal] .timer-numerals{font-family:'Instrument Sans',sans-serif!important;font-size:76px!important;font-weight:500!important;letter-spacing:-.04em!important;color:#e9f4d9!important;text-shadow:0 0 24px #a7d89d33}
+.timer-ink{z-index:1;pointer-events:none}
 .desktop-setup[hidden],.web-setup[hidden]{display:none!important}
 .desktop-setup a.ex-button{display:inline-block;text-decoration:none}
 cadence-settings{display:block;grid-column:1/-1}

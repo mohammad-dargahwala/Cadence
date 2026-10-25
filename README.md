@@ -23,7 +23,9 @@ Four animated scenes join the original Graphite, Ember, Mist and Clay themes:
 - **Stardust** — hundreds of particles following braided paths around a star vortex.
 - **Firefly Grove** — layered woodland silhouettes and fireflies drifting through the mist.
 
-The artwork is drawn locally on a canvas, including the previews in Settings. Minimalist settings control backgrounds, movement, the timer wave, cursor effects, round/task details and interface sounds. Reduced motion preserves a complete still composition. The scenes are original code, with visual inspiration from [Refik Anadol’s fluid pigments](https://refikanadol.com/works/unsupervised/) and [teamLab’s nature and particle installations](https://www.teamlab.art/).
+The artwork is drawn locally on a canvas, including the previews in Settings. Minimalist settings control backgrounds, movement, the timer wave, cursor effects, round/task details and interface sounds. Flow mode runs continuously, including while the countdown is paused. Choose Gentle, Fluid or Expressive pace. The separate Follow system reduced motion option can honor your device preference; turning Flowing motion off always freezes a complete still composition. The scenes are original code, with visual inspiration from [Refik Anadol’s fluid pigments](https://refikanadol.com/works/unsupervised/) and [teamLab’s nature and particle installations](https://www.teamlab.art/).
+
+Each of the four custom themes also has a matching timer: a rotating blossom lens, a morphing marbled paint droplet, a precessing orbital dial, or a glass firefly terrarium. Their artwork responds to countdown progress. Rivers of Color uses a changing domain-warped pigment field, with a moving canvas fallback; petals, stars and fireflies retain their positions and integrate through migrating vortices rather than replaying a fixed path. Settings links to a music-free live gallery at `/living-themes.html`, with motion/pacing controls and a countdown scrubber.
 
 ## Spotify
 

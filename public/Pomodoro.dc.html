@@ -10,6 +10,7 @@
 <script src="./analytics-core.js"></script>
 <script src="./sync.js"></script>
 <link rel="stylesheet" href="./experience.css">
+<script src="./flow-engine.js" defer></script>
 <script src="./atmospheres.js" defer></script>
 <script src="./experience.js" defer></script>
 </head>
@@ -145,10 +146,10 @@ a:hover{color:var(--accent2)}
 
         <div class="timer-face" style="position:relative;width:340px;height:340px;border-radius:50%;overflow:hidden;border:1px solid var(--card-b);background:var(--card);box-shadow:0 40px 90px -40px var(--glow),inset 0 1px 0 rgba(255,255,255,.06)">
           <canvas id="waveCanvas" style="position:absolute;inset:0;width:100%;height:100%;display:block"></canvas>
-          <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
-            <span style="font:500 11px 'IBM Plex Mono',monospace;letter-spacing:.22em;color:var(--fg3)">{{ modeLabel }}</span>
-            <span style="font:500 74px/1 'IBM Plex Mono',monospace;letter-spacing:-.045em;color:var(--fg)">{{ timeText }}</span>
-            <span style="font:400 12.5px 'Instrument Sans',sans-serif;white-space:nowrap;color:var(--fg2)">{{ statusText }}</span>
+          <div class="timer-ink" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
+            <span class="timer-mode" style="font:500 11px 'IBM Plex Mono',monospace;letter-spacing:.22em;color:var(--fg3)">{{ modeLabel }}</span>
+            <span class="timer-numerals" style="font:500 74px/1 'IBM Plex Mono',monospace;letter-spacing:-.045em;color:var(--fg)">{{ timeText }}</span>
+            <span class="timer-status" style="font:400 12.5px 'Instrument Sans',sans-serif;white-space:nowrap;color:var(--fg2)">{{ statusText }}</span>
           </div>
         </div>
 
@@ -376,6 +377,7 @@ a:hover{color:var(--accent2)}
             </sc-for>
           </div>
           <p style="margin:0;font:400 12.5px/1.6 'Instrument Sans',sans-serif;color:var(--fg2)">A different world for every mood. Tune backgrounds and motion in Minimalist below.</p>
+          <a href="/living-themes.html" target="_blank" rel="noopener" style="font:500 12px 'Instrument Sans',sans-serif;color:var(--accent)">Explore the living themes ↗</a>
 
           <div style="height:1px;background:var(--card-b)"></div>
 
@@ -682,6 +684,10 @@ class Component extends DCLogic {
   drawWave = () => {
     const c = this.canvas = document.getElementById('waveCanvas');
     if (c && document.documentElement.dataset.wave !== 'false' && document.visibilityState === 'visible') {
+      const custom = ['aurora','solstice','sakura','tidal'].includes(this.state.theme) && window.CadenceFlow;
+      const now = performance.now();
+      if (custom && this.lastArtFrame && now - this.lastArtFrame < 33) { this.raf = requestAnimationFrame(this.drawWave); return; }
+      this.lastArtFrame = now;
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       const w = c.clientWidth, h = c.clientHeight;
       if (w && (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr))) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
@@ -692,7 +698,11 @@ class Component extends DCLogic {
       const frac = Math.max(0, Math.min(1, this.state.remaining / this.total()));
       this.fillFrac = this.fillFrac == null ? frac : this.fillFrac + (frac - this.fillFrac) * .07;
       const base = h * (1 - this.fillFrac);
-      const t = document.documentElement.dataset.motion === 'false' ? 0 : performance.now() / 1000;
+      const t = document.documentElement.dataset.motion === 'false' ? 24 : performance.now() / 1000 * (Number(document.documentElement.dataset.flowSpeed) || 1);
+      if (custom) {
+        window.CadenceAtmospheres.drawTimer(ctx, w, h, t, this.state.theme, this.fillFrac);
+        this.raf = requestAnimationFrame(this.drawWave); return;
+      }
       const amp = this.state.running ? 1 : .4;
       const layers = [
         { a: 10, len: 1.5, sp: .8, col: th.wave2, off: 7 },
@@ -964,6 +974,8 @@ class Component extends DCLogic {
     Object.keys(map).forEach(k => r.setProperty(k, map[k]));
     document.body.style.background = t.bg;
     document.documentElement.dataset.theme = id;
+    const face = document.querySelector('.timer-face');
+    if (face && !['aurora','solstice','sakura','tidal'].includes(id)) face.style.borderRadius = '50%';
   }
 
   /* ---------- sliders ---------- */

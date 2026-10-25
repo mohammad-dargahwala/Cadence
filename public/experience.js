@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const defaults = { minimalist:false, background:true, motion:true, wave:true, cursor:false, details:true, clickSounds:true, musicMode:'off', songName:true, musicSource:'desktop' };
+  const defaults = { minimalist:false, background:true, motion:true, followSystemMotion:false, flowSpeed:1, wave:true, cursor:false, details:true, clickSounds:true, musicMode:'off', songName:true, musicSource:'desktop' };
   const store = window.CadenceStore;
   const root = document.documentElement;
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
@@ -26,7 +26,8 @@
     }
     for (const key of ['background','wave','details','clickSounds']) root.dataset[key] = String(prefs[key]);
     root.dataset.cursor = String(prefs.cursor && matchMedia('(pointer:fine)').matches);
-    root.dataset.motion = String(prefs.motion && !reduced.matches);
+    root.dataset.motion = String(prefs.motion && (!prefs.followSystemMotion || !reduced.matches));
+    root.dataset.flowSpeed = String(Math.max(.35,Math.min(2,Number(prefs.flowSpeed)||1)));
     if (account !== st.workspaceId) {
       if(desktopReady) bridge('/disconnect',{}).catch(()=>{});
       desktopReady=false;
@@ -269,11 +270,14 @@
       musicCard.insertBefore(desktopSetup,musicCard.querySelector('details'));
       this.querySelector('details').classList.add('web-setup');
       this.querySelector('.connect-desktop').onclick=()=>connectDesktop(this.querySelector('.desktop-key').value.trim());
+      const pace=document.createElement('label');pace.className='ex-row';pace.innerHTML='<span>Flow pace<small>Continuous evolution, even while the timer is paused.</small></span><select data-pref="flowSpeed"><option value="0.55">Gentle</option><option value="1">Fluid</option><option value="1.65">Expressive</option></select>';
+      this.querySelector('.visual-toggles').after(pace);
       for(const [key,label,help] of [
         ['minimalist','Minimalist mode','Turn off decoration in one step. Individual choices below remain yours.'],
         ['background','Theme background','A living scene made for your selected theme.'],
-        ['motion','Flowing motion','Slow movement. Your system’s reduced motion preference takes priority.'],
-        ['wave','Timer wave','Show the liquid progress inside the timer.'],
+        ['motion','Flowing motion','Continuous evolution, even while the countdown is paused.'],
+        ['followSystemMotion','Follow system reduced motion','Pause the artwork when your device requests reduced motion.'],
+        ['wave','Timer artwork','Theme-specific living artwork and countdown progress inside the timer.'],
         ['cursor','Cursor effects','A magnetic cursor on devices with a mouse.'],
         ['details','Timer details','Show round markers and the pinned task.'],
         ['clickSounds','Interface sounds','Quiet feedback for clicks. The completion alarm has its own controls.']
@@ -311,22 +315,23 @@
     if(!window.CadenceAtmospheres) return;
     const canvas=document.getElementById('atmosphere');if(!canvas)return;
     const theme=root.dataset.theme||'graphite',motion=root.dataset.motion!=='false';
-    const scene=theme+innerWidth+innerHeight+prefs.background+motion;
-    if(!document.hidden && now-lastPreview>1000) {
+    const scene=theme+innerWidth+innerHeight+prefs.background+motion+prefs.flowSpeed;
+    const artTime=motion?now/1000*Number(root.dataset.flowSpeed||1):24;
+    if(!document.hidden && now-lastPreview>100) {
       lastPreview=now;
       document.querySelectorAll('.theme-preview[data-scene]').forEach(el=>{
         let preview=el.querySelector('canvas');
         if(!preview){preview=document.createElement('canvas');preview.setAttribute('aria-hidden','true');el.append(preview);}
         const width=Math.round(el.clientWidth),height=Math.round(el.clientHeight);if(!width||!height)return;
         if(preview.width!==width||preview.height!==height){preview.width=width;preview.height=height;}
-        window.CadenceAtmospheres.draw(preview.getContext('2d'),width,height,24,el.dataset.scene);
+        window.CadenceAtmospheres.draw(preview.getContext('2d'),width,height,artTime,el.dataset.scene);
       });
     }
     if(!prefs.background||document.hidden||(!motion&&scene===lastScene)||(motion&&now&&now-lastFrame<33))return;
     lastFrame=now;lastScene=scene;
     const w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,1.5),ctx=canvas.getContext('2d');if(!ctx)return;
     if(canvas.width!==Math.round(w*dpr)||canvas.height!==Math.round(h*dpr)){canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);}
-    ctx.setTransform(dpr,0,0,dpr,0,0);window.CadenceAtmospheres.draw(ctx,w,h,motion?now/1000:24,theme);
+    ctx.setTransform(dpr,0,0,dpr,0,0);window.CadenceAtmospheres.draw(ctx,w,h,artTime,theme);
   }
   function animate(now) { drawAtmosphere(now); requestAnimationFrame(animate); }
   requestAnimationFrame(animate);
