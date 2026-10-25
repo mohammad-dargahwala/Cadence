@@ -38,7 +38,7 @@ Visual references include [NASA's black hole accretion disk visualization](https
 
 Choose Glass chimes, Warm piano, Singing bowl, Harp cascade, Water droplets, Soft pulse or Silent. They use layered instruments with soft attacks and bounded echo tails, rather than a loud square-wave siren. Selecting a sound is silent; Preview plays one phrase, limited to three seconds.
 
-Settings includes the normal alarm duration (0 means until dismissed), the duration when music was playing (3 seconds by default), and the interval between repeated phrases. Cadence captures music playback before the focus-to-break pause. Scheduled audio stops at the cap even if a browser timer is late. The alarm notice shows a sound countdown and remains available after the sound finishes. See the [Web Audio scheduling reference](https://developer.mozilla.org/en-US/docs/Web/API/AudioScheduledSourceNode/stop).
+When music was playing, Settings controls a **chime count**, defaulting to **3**. One chime is a complete play of the selected instrument phrase, including its natural decay and echoes. The next chime starts when that sound finishes, so each instrument has its own timing. The whole sequence is scheduled on the audio clock and finishes after the requested number of complete chimes, with a chimes-remaining indicator. Old music-duration settings fall back to 3 chimes rather than being interpreted as counts. Without music, the normal duration (0 means until dismissed) and repeat interval still apply. Cadence captures music playback before the focus-to-break pause, and the notice remains after the sound finishes. See the [Web Audio scheduling reference](https://developer.mozilla.org/en-US/docs/Web/API/AudioScheduledSourceNode/start).
 
 ## Spotify
 

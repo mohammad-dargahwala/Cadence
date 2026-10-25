@@ -10,15 +10,24 @@
     ripple:{notes:[[0,880],[.38,1318.51],[.85,1046.5]],partials:[[1,1],[2.001,.16]],decay:1,attack:.025,slide:true},
     digital:{notes:[[0,523.25],[.22,659.25],[.55,783.99]],partials:[[1,1],[2,.10]],decay:.42,attack:.025}
   };
+  const lead=.006,echoes=[[0,1],[.19,.12],[.37,.045]];
+  // One chime is a complete instrument phrase, including its last echo and decay.
+  function chimeDuration(id){
+    const score=scores[id];return score?lead+Math.max(...score.notes.map(([offset])=>offset))+echoes.at(-1)[0]+score.decay:0;
+  }
+  function chimeCount(settings){
+    const count=Number(settings.musicAlarmChimes);
+    return Number.isFinite(count)?Math.max(1,Math.min(30,Math.round(count))):3;
+  }
   function play(ac,destination,id,options={}){
     const score=scores[id];if(!score)return null;
-    const now=ac.currentTime,start=now+.006,limit=Number.isFinite(options.limit)?Math.max(0,options.limit):Infinity;
+    const now=ac.currentTime,start=now+lead+(Number.isFinite(options.delay)?Math.max(0,options.delay):0),limit=Number.isFinite(options.limit)?Math.max(0,options.limit):Infinity;
     const deadline=now+limit,voices=[],master=ac.createGain();let naturalEnd=now,stopped=false,remaining=0;
     master.gain.setValueAtTime(1,now);master.connect(destination);
     const volume=Math.max(0,Math.min(1,Number(options.volume)||0));
     for(const [offset,freq] of score.notes){
       // Quiet secondary taps give the instruments space without an unbounded reverb tail.
-      for(const [echo,level]of [[0,1],[.19,.12],[.37,.045]]){
+      for(const [echo,level]of echoes){
         const at=start+offset+echo,end=Math.min(at+score.decay,deadline);if(end-at<.035)continue;
         for(const [ratio,strength]of score.partials){
           const oscillator=ac.createOscillator(),gain=ac.createGain(),attack=Math.min(score.attack,(end-at)*.2);
@@ -42,9 +51,9 @@
     }};
   }
   function duration(settings,musicPlaying){
-    const normal=Number(settings.alarmDuration),music=Number(settings.musicAlarmDuration);
+    const normal=Number(settings.alarmDuration);
     const base=Number.isFinite(normal)?Math.max(0,Math.min(120,normal)):0;
-    return musicPlaying?Math.min(base||Infinity,Number.isFinite(music)?Math.max(1,Math.min(30,music)):3):base;
+    return musicPlaying?chimeCount(settings)*chimeDuration(settings.alarmSound||'chime'):base;
   }
-  window.CadenceAlarm={sounds,play,duration};
+  window.CadenceAlarm={sounds,play,duration,chimeCount,chimeDuration};
 })();
