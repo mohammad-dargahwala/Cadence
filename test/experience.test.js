@@ -1,0 +1,92 @@
+'use strict';
+// Behavioral tests with a fake clock and mocked Spotify transport. No live account.
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const crypto = require('node:crypto');
+const path = require('node:path');
+const source = fs.readFileSync(path.join(__dirname,'../public/experience.js'),'utf8');
+const flush = async () => { for(let i=0;i<12;i++) await new Promise(setImmediate); };
+function harness() {
+  let now=1000000, sequence=0, pendingPlay;
+  const callbacks=new Map(), intervals=new Map(), requests=[], listeners={}, data=new Map();
+  const state={workspaceId:'account-a',user:'Tester',settings:{experience:{musicMode:'full'}}};
+  data.set('cadence.spotify.tokens',JSON.stringify({owner:'account-a',clientId:'a'.repeat(32),access_token:'test-access',refresh_token:'test-refresh',expiresAt:now+3600000}));
+  class Element {
+    constructor(){this.dataset={};this.style={};this.children=[];this.nodes={};}
+    setAttribute(){}
+    append(...els){this.children.push(...els);}
+    querySelector(key){
+      if(key==='[data-action=play]') return this.querySelector('.music-controls').children.find(b=>b.dataset.action==='play');
+      return this.nodes[key] ||= new Element();
+    }
+    querySelectorAll(key){return key==='button'?this.querySelector('.music-controls').children:[];}
+  }
+  const body=new Element(), root=new Element();
+  const document={documentElement:root,body,hidden:false,querySelectorAll:()=>[],getElementById:()=>null,createElement:()=>new Element(),addEventListener:(k,fn)=>listeners[k]=fn};
+  const store={getState:()=>state,subscribe(fn){this.subscriber=fn;},ready:Promise.resolve(),saveSettings(patch){Object.assign(state.settings,patch);this.subscriber(state);}};
+  const context={document,HTMLElement:Element,customElements:{define(){}},matchMedia:()=>({matches:false,addEventListener(){}}),location:{search:'',origin:'https://cadence.test'},history:{replaceState(){}},crypto:crypto.webcrypto,TextEncoder,URLSearchParams,
+    AbortSignal,localStorage:{setItem(){},getItem(){return null;}},sessionStorage:{getItem:k=>data.get(k),setItem:(k,v)=>data.set(k,v),removeItem:k=>data.delete(k)},
+    Date:class extends Date {static now(){return now;}},setTimeout(fn,delay){const id=++sequence;callbacks.set(id,{fn,delay});return id;},clearTimeout:id=>callbacks.delete(id),setInterval(fn){const id=++sequence;intervals.set(id,fn);return id;},clearInterval:id=>intervals.delete(id),requestAnimationFrame(){return 1;},
+    fetch:async(url,opts={})=>{
+      requests.push({url,method:opts.method||'GET'});
+      if(url.endsWith('/play') && pendingPlay) { const p=pendingPlay; pendingPlay=null; await p; }
+      return {status:204,ok:true,headers:{get(){return null;}}};
+    },console
+  };
+  context.window={CadenceStore:store,addEventListener:(k,fn)=>listeners[k]=fn};
+  vm.runInNewContext(source,context);
+  return {context,root,state,store,requests,body,callbacks,intervals,data,
+    timer(next){context.window.CadenceExperience.timer({signedIn:true,running:true,mode:'focus',remaining:60,deadline:now+60000,view:'timer',alarm:false,...next});},
+    setNow(v){now=v;},now:()=>now,
+    holdPlay(){return new Promise(resolve=>{let release;pendingPlay=new Promise(r=>release=r);resolve(release);});}
+  };
+}
+(async()=>{
+  const h=harness(); await flush();
+  h.timer();await flush();assert(h.requests.at(-1).url.endsWith('/play'),'focus resumes playback');
+  h.timer({running:false});await flush();assert(h.requests.at(-1).url.endsWith('/pause'),'pausing timer pauses playback');
+  h.timer();await flush();h.timer({mode:'short'});await flush();assert(h.requests.at(-1).url.endsWith('/pause'),'short break pauses playback');
+  h.timer();await flush();h.timer({mode:'long'});await flush();assert(h.requests.at(-1).url.endsWith('/pause'),'long break pauses playback');
+  h.timer();await flush();h.timer({alarm:true});await flush();assert(h.requests.at(-1).url.endsWith('/pause'),'completion alarm pauses playback');
+  h.timer({alarm:false});await flush();h.setNow(h.now()+60001);
+  for(const item of [...h.callbacks.values()]) item.fn();
+  await flush();assert(h.requests.at(-1).url.endsWith('/pause'),'deadline pauses even before timer view updates');
+
+  h.timer();await flush();
+  const player=h.body.children[0],playButton=player.querySelector('[data-action=play]');
+  const manualStart=h.requests.length;playButton.onclick();await flush();assert(h.requests.slice(manualStart).some(r=>r.url.endsWith('/pause')),'manual pause works');
+  const n=h.requests.length;h.timer({remaining:59});await flush();assert.equal(h.requests.length,n,'timer ticks do not undo manual pause');
+  h.timer({mode:'short'});await flush();h.timer();await flush();assert(h.requests.at(-1).url.endsWith('/play'),'next focus block resumes');
+
+  h.store.saveSettings({experience:{musicMode:'hide',songName:true}});h.timer();
+  assert.equal(player.dataset.mode,'hide');assert.equal(player.querySelector('.music-title').hidden,true,'hide mode removes track identity');
+  h.store.saveSettings({experience:{musicMode:'artwork',songName:false}});h.timer();assert.equal(player.querySelector('.music-title').hidden,true,'song-name toggle hides title');
+  h.store.saveSettings({experience:{musicMode:'off'}});h.timer();await flush();assert.equal(player.hidden,true,'off hides player');assert(h.requests.at(-1).url.endsWith('/pause'),'off pauses playback even when setting arrives from another tab');
+  const before=h.requests.length;h.timer({mode:'long'});await flush();assert.equal(h.requests.length,before,'off makes no playback commands');
+  h.store.saveSettings({experience:{musicMode:'full',background:false,wave:false,details:false,motion:false}});
+  assert.equal(h.root.dataset.background,'false');assert.equal(h.root.dataset.motion,'false');assert.equal(h.root.dataset.wave,'false');
+
+  const race=harness();await flush();const release=await race.holdPlay();race.timer();await flush();race.timer({mode:'short'});await flush();assert(race.requests.at(-1).url.endsWith('/pause'),'break pause does not wait for an in-flight resume');release();await flush();
+  assert(race.requests.at(-1).url.endsWith('/pause'),'late resume response cannot leave a break playing');
+  race.timer();await flush();race.state.workspaceId=null;race.state.user=null;race.store.subscriber(race.state);await flush();
+  assert.equal(race.data.has('cadence.spotify.tokens'),false,'sign-out removes tab credentials');assert(race.requests.at(-1).url.endsWith('/pause'),'sign-out pauses music');
+
+  const html=fs.readFileSync(path.join(__dirname,'../public/Pomodoro.dc.html'),'utf8');
+  const code=html.match(/<script type="text\/x-dc"[^>]*>([\s\S]*?)<\/script>/)[1];
+  const saved=new Map(), logged=[], timers=new Map();let clock=5000000,index=0;
+  class Logic{constructor(){this.props={};}setState(patch,fn){Object.assign(this.state,typeof patch==='function'?patch(this.state):patch);if(fn)fn();}}
+  const Component=vm.runInNewContext(code+'; Component',{DCLogic:Logic,crypto:crypto.webcrypto,console,
+    Date:class extends Date{static now(){return clock;}},localStorage:{getItem:k=>saved.get(k),setItem:(k,v)=>saved.set(k,v)},
+    document:{documentElement:{style:{setProperty(){}},dataset:{}},body:{style:{}}},window:{},
+    setInterval:()=>++index,clearInterval(){},setTimeout:(fn)=>{timers.set(++index,fn);return index;},clearTimeout:id=>timers.delete(id)});
+  const c=new Component();c.pop=()=>{};c.toast=()=>{};c.startAlarm=()=>{};
+  c.store={logSession:e=>logged.push(e),getState:()=>({sessions:[]})};c.state.user='Tester';c.TIMER_KEY='timer-a';
+  assert.equal(Object.keys(c.themes).length,8,'eight themes available');
+  c.setRunning(true);clock+=1499700;c.tick();assert.equal(c.state.remaining,1,'timer never finishes half a second early');clock+=300;c.tick();assert.equal(c.state.mode,'short');assert.equal(logged[0].seconds,1500);
+  c.setMode('long')();assert.equal(c.renderVals().runLabel,'Start break','break action uses correct label');
+  c.setMode('focus')();c.setRunning(true);c.state.durations.focus=40;assert.equal(c.total(),1500,'editing preferences does not change an active interval length');c.setRunning(false);c.reset();assert.equal(c.total(),2400,'reset adopts the new interval preference');
+  c.state.alarmSound='bell';c.playAlarmOnce();assert.equal(c.alarmNotes.length,3);c.stopAlarm();assert.equal(timers.size,0,'alarm dismissal cancels pending notes');
+  c.state.running=true;c.onStoreChange({user:'Other',workspaceId:'other',settings:{durations:{focus:30,short:5,long:15}}});assert.equal(c.state.running,false,'new account never inherits active timer');assert.equal(c.state.remaining,1800);assert.equal(c.TIMER_KEY,'cadence.timer.other');
+  console.log('Experience and timer regressions passed: focus/break/pause/alarm/deadline, playback races, manual pause, display modes, sign-out, themes, countdown rounding, account isolation, and alarm cancellation.');
+})().catch(e=>{console.error(e);process.exitCode=1;});

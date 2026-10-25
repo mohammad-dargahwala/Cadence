@@ -624,9 +624,10 @@
 
     /** Append one immutable interval to the log. */
     logSession: function (evt) {
+      if (evt.id && state.sessions.some(function(s) { return s.id === evt.id; })) return state.sessions.find(function(s) { return s.id === evt.id; });
       var ended = evt.endedAt || Date.now();
       var record = {
-        id: uuid(),
+        id: evt.id || uuid(),
         mode: evt.mode,
         seconds: Math.max(0, Math.round(evt.seconds || 0)),
         planned: Math.round(evt.planned || 0),

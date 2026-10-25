@@ -2,13 +2,15 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Pomodoro Timer</title>
+<title>Cadence · Time to focus</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="./vendor-map.js"></script>
 <script src="./support.js"></script>
 <script src="./analytics-core.js"></script>
 <script src="./sync.js"></script>
+<link rel="stylesheet" href="./experience.css">
+<script src="./experience.js" defer></script>
 </head>
 <body>
 <x-dc>
@@ -38,20 +40,13 @@ a:hover{color:var(--accent2)}
 </style>
 </helmet>
 
-<div style="position:relative;min-height:100vh;overflow:hidden;background:var(--bg)">
+<div style="position:relative;min-height:100vh;overflow:hidden">
+<canvas id="atmosphere" aria-hidden="true"></canvas>
 
   <div id="pcRing" style="position:fixed;left:0;top:0;width:34px;height:34px;border:1.5px solid var(--ring);border-radius:999px;transform:translate(-50%,-50%);pointer-events:none;z-index:9999;transition:width .22s cubic-bezier(.34,1.56,.64,1),height .22s cubic-bezier(.34,1.56,.64,1),border-radius .22s,opacity .2s"></div>
   <div id="pcDot" style="position:fixed;left:0;top:0;width:6px;height:6px;border-radius:999px;background:var(--fg);transform:translate(-50%,-50%);pointer-events:none;z-index:9999"></div>
 
-  <sc-if value="{{ ambient }}" hint-placeholder-val="{{ true }}">
-    <div style="position:absolute;inset:0;pointer-events:none;overflow:hidden">
-      <div style="position:absolute;left:-6%;top:-12%;width:520px;height:520px;border-radius:50%;background:var(--accent);opacity:.16;filter:blur(110px);animation:fl1 24s ease-in-out infinite"></div>
-      <div style="position:absolute;right:-8%;top:18%;width:460px;height:460px;border-radius:50%;background:var(--accent2);opacity:.14;filter:blur(120px);animation:fl2 31s ease-in-out infinite"></div>
-      <div style="position:absolute;left:38%;bottom:-18%;width:600px;height:600px;border-radius:50%;background:var(--accent);opacity:.10;filter:blur(140px);animation:fl3 27s ease-in-out infinite"></div>
-    </div>
-  </sc-if>
-
-  <div style="position:relative;max-width:1120px;margin:0 auto;padding:0 32px 72px">
+ <div class="app-shell" style="position:relative;max-width:1120px;margin:0 auto;padding:0 32px 72px">
 
     <sc-if value="{{ signedOut }}" hint-placeholder-val="{{ false }}">
       <section style="display:flex;flex-direction:column;align-items:center;gap:26px;padding:96px 0 0">
@@ -147,7 +142,7 @@ a:hover{color:var(--accent2)}
           </sc-for>
         </div>
 
-        <div style="position:relative;width:340px;height:340px;border-radius:50%;overflow:hidden;border:1px solid var(--card-b);background:var(--card);box-shadow:0 40px 90px -40px var(--glow),inset 0 1px 0 rgba(255,255,255,.06)">
+        <div class="timer-face" style="position:relative;width:340px;height:340px;border-radius:50%;overflow:hidden;border:1px solid var(--card-b);background:var(--card);box-shadow:0 40px 90px -40px var(--glow),inset 0 1px 0 rgba(255,255,255,.06)">
           <canvas id="waveCanvas" style="position:absolute;inset:0;width:100%;height:100%;display:block"></canvas>
           <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
             <span style="font:500 11px 'IBM Plex Mono',monospace;letter-spacing:.22em;color:var(--fg3)">{{ modeLabel }}</span>
@@ -156,14 +151,14 @@ a:hover{color:var(--accent2)}
           </div>
         </div>
 
-        <div style="display:flex;align-items:center;gap:9px">
+        <div class="timer-detail" style="display:flex;align-items:center;gap:9px">
           <sc-for list="{{ dots }}" as="d" hint-placeholder-count="4">
             <span style="width:{{ d.w }}px;height:8px;border-radius:999px;background:{{ d.bg }};transition:all .4s cubic-bezier(.34,1.4,.5,1)"></span>
           </sc-for>
           <span style="margin-left:6px;font:400 11px 'IBM Plex Mono',monospace;color:var(--fg3);letter-spacing:.08em">{{ roundText }}</span>
         </div>
 
-        <div style="display:flex;align-items:center;gap:12px">
+        <div class="timer-actions" style="display:flex;align-items:center;gap:12px">
           <button data-magnet="1" onClick="{{ toggleRun }}" style="height:52px;min-width:158px;padding:0 34px;border:0;border-radius:16px;background:var(--accent);color:var(--btn-fg);font:600 14.5px 'Instrument Sans',sans-serif;letter-spacing:-.01em;box-shadow:0 16px 34px -12px var(--glow);transition:transform .22s cubic-bezier(.34,1.56,.64,1),box-shadow .3s" style-hover="transform:translateY(-2px) scale(1.02)" style-active="transform:scale(.93)">{{ runLabel }}</button>
           <button data-magnet="1" onClick="{{ reset }}" style="height:52px;padding:0 22px;border:1px solid var(--card-b);border-radius:16px;background:var(--card);color:var(--fg2);font:500 13.5px 'Instrument Sans',sans-serif;transition:transform .22s cubic-bezier(.34,1.56,.64,1),color .25s" style-hover="color:var(--fg)" style-active="transform:scale(.93)">Reset</button>
           <button data-magnet="1" onClick="{{ skip }}" style="height:52px;padding:0 22px;border:1px solid var(--card-b);border-radius:16px;background:var(--card);color:var(--fg2);font:500 13.5px 'Instrument Sans',sans-serif;transition:transform .22s cubic-bezier(.34,1.56,.64,1),color .25s" style-hover="color:var(--fg)" style-active="transform:scale(.93)">Skip</button>
@@ -171,7 +166,7 @@ a:hover{color:var(--accent2)}
         </div>
 
         <sc-if value="{{ hasActive }}" hint-placeholder-val="{{ true }}">
-          <div style="display:flex;align-items:center;gap:12px;padding:11px 18px 11px 14px;background:var(--card);border:1px solid var(--card-b);border-radius:14px;backdrop-filter:blur(20px)">
+          <div class="timer-detail" style="display:flex;align-items:center;gap:12px;padding:11px 18px 11px 14px;background:var(--card);border:1px solid var(--card-b);border-radius:14px;backdrop-filter:blur(20px)">
             <span style="width:7px;height:7px;border-radius:999px;background:var(--accent);box-shadow:0 0 12px var(--glow)"></span>
             <span style="font:400 10px 'IBM Plex Mono',monospace;letter-spacing:.14em;color:var(--fg3)">ACTIVE TARGET</span>
             <span style="font:500 13.5px 'Instrument Sans',sans-serif;white-space:nowrap;color:var(--fg)">{{ activeTaskName }}</span>
@@ -179,7 +174,7 @@ a:hover{color:var(--accent2)}
           </div>
         </sc-if>
         <sc-if value="{{ noActive }}" hint-placeholder-val="{{ false }}">
-          <button data-magnet="1" onClick="{{ goTasks }}" style="padding:11px 18px;background:transparent;border:1px dashed var(--card-b);border-radius:14px;color:var(--fg3);font:400 12.5px 'Instrument Sans',sans-serif;transition:color .25s" style-hover="color:var(--fg2)">No active target — pin one in Tasks</button>
+          <button class="timer-detail" data-magnet="1" onClick="{{ goTasks }}" style="padding:11px 18px;background:transparent;border:1px dashed var(--card-b);border-radius:14px;color:var(--fg3);font:400 12.5px 'Instrument Sans',sans-serif;transition:color .25s" style-hover="color:var(--fg2)">No active target — pin one in Tasks</button>
         </sc-if>
       </section>
     </sc-if>
@@ -277,7 +272,7 @@ a:hover{color:var(--accent2)}
     </sc-if>
 
     <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
-      <section style="display:grid;grid-template-columns:1.35fr 1fr;gap:16px;padding:8px 0 0;align-items:start">
+      <section class="settings-grid" style="display:grid;grid-template-columns:1.35fr 1fr;gap:16px;padding:8px 0 0;align-items:start">
         <div style="display:flex;flex-direction:column;gap:26px;padding:26px;background:var(--card);border:1px solid var(--card-b);border-radius:18px;backdrop-filter:blur(20px)">
           <span style="font:600 14px 'Instrument Sans',sans-serif;color:var(--fg)">Intervals</span>
 
@@ -366,11 +361,11 @@ a:hover{color:var(--accent2)}
         </div>
 
         <div style="display:flex;flex-direction:column;gap:18px;padding:26px;background:var(--card);border:1px solid var(--card-b);border-radius:18px;backdrop-filter:blur(20px)">
-          <span style="font:600 14px 'Instrument Sans',sans-serif;color:var(--fg)">Appearance</span>
+          <span style="font:600 14px 'Instrument Sans',sans-serif;color:var(--fg)">Appearance · eight atmospheres</span>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
             <sc-for list="{{ themeList }}" as="th" hint-placeholder-count="4">
               <button data-magnet="1" onClick="{{ th.go }}" style="display:flex;flex-direction:column;gap:12px;padding:14px;border:1.5px solid {{ th.cardB }};border-radius:15px;background:{{ th.cardBg }};text-align:left;transition:transform .25s cubic-bezier(.34,1.4,.5,1),border-color .3s" style-hover="transform:translateY(-3px)" style-active="transform:scale(.96)">
-                <span style="display:flex;gap:5px">
+                <span class="theme-preview" style="background:{{ th.preview }}">
                   <span style="width:22px;height:22px;border-radius:7px;background:{{ th.s1 }}"></span>
                   <span style="width:22px;height:22px;border-radius:7px;background:{{ th.s2 }}"></span>
                   <span style="width:22px;height:22px;border-radius:7px;background:{{ th.s3 }}"></span>
@@ -379,7 +374,7 @@ a:hover{color:var(--accent2)}
               </button>
             </sc-for>
           </div>
-          <p style="margin:0;font:400 12.5px/1.6 'Instrument Sans',sans-serif;color:var(--fg2)">Themes recalculate live — cards, type, the wave canvas, charts and the cursor ring all follow.</p>
+          <p style="margin:0;font:400 12.5px/1.6 'Instrument Sans',sans-serif;color:var(--fg2)">A different world for every mood. Tune backgrounds and motion in Minimalist below.</p>
 
           <div style="height:1px;background:var(--card-b)"></div>
 
@@ -391,6 +386,7 @@ a:hover{color:var(--accent2)}
             <button data-magnet="1" onClick="{{ signOut }}" style="height:36px;flex:none;padding:0 16px;border:1px solid var(--card-b);border-radius:11px;background:transparent;color:var(--fg2);font:500 12px 'Instrument Sans',sans-serif;transition:transform .22s cubic-bezier(.34,1.56,.64,1),color .25s,background .25s" style-hover="color:var(--fg);background:var(--pill)" style-active="transform:scale(.95)">Sign out</button>
           </div>
         </div>
+        <cadence-settings></cadence-settings>
       </section>
     </sc-if>
     </sc-if>
@@ -426,6 +422,10 @@ a:hover{color:var(--accent2)}
 <script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;graphite&quot;,&quot;ember&quot;,&quot;mist&quot;,&quot;clay&quot;],&quot;default&quot;:&quot;graphite&quot;,&quot;tsType&quot;:&quot;'graphite'|'ember'|'mist'|'clay'&quot;,&quot;section&quot;:&quot;Appearance&quot;},&quot;ambientMotion&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Appearance&quot;},&quot;magnetStrength&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:0.55,&quot;min&quot;:0,&quot;max&quot;:1,&quot;step&quot;:0.05,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Cursor&quot;}}">
 class Component extends DCLogic {
   themes = {
+    aurora: {"name":"Aurora","bg":"#080f20","bg2":"#10192c","fg":"#eff9ff","fg2":"#e3e6f0b8","fg3":"#c2ccd995","card":"#10142199","cardB":"#ffffff20","pill":"#ffffff12","accent":"#7fe6c1","accent2":"#aa9bff","btnFg":"#080f20","glow":"#7fe6c145","ring":"#7fe6c1","wave1":"#7fe6c150","wave2":"#aa9bff38"},
+    solstice: {"name":"Solstice","bg":"#22121c","bg2":"#301d27","fg":"#fff4e5","fg2":"#e3e6f0b8","fg3":"#c2ccd995","card":"#10142199","cardB":"#ffffff20","pill":"#ffffff12","accent":"#ffc59b","accent2":"#f38e9a","btnFg":"#22121c","glow":"#ffc59b45","ring":"#ffc59b","wave1":"#ffc59b50","wave2":"#f38e9a38"},
+    sakura: {"name":"Sakura","bg":"#f6eef3","bg2":"#fff8fb","fg":"#302336","fg2":"#514656","fg3":"#716575","card":"#ffffff9c","cardB":"#62516b26","pill":"#72607e14","accent":"#a34b73","accent2":"#8070b0","btnFg":"#fff","glow":"#a34b7345","ring":"#a34b73","wave1":"#a34b7350","wave2":"#8070b038"},
+    tidal: {"name":"Tidal","bg":"#061923","bg2":"#0b2532","fg":"#e4f9ff","fg2":"#e3e6f0b8","fg3":"#c2ccd995","card":"#10142199","cardB":"#ffffff20","pill":"#ffffff12","accent":"#68d6eb","accent2":"#76a5ff","btnFg":"#061923","glow":"#68d6eb45","ring":"#68d6eb","wave1":"#68d6eb50","wave2":"#76a5ff38"},
     graphite: { name: 'Graphite', bg:'#0e1013', bg2:'#15181d', card:'rgba(255,255,255,.045)', cardB:'rgba(255,255,255,.09)',
       fg:'#f2f3f5', fg2:'rgba(242,243,245,.70)', fg3:'rgba(242,243,245,.40)', pill:'rgba(255,255,255,.09)',
       accent:'oklch(.78 .13 165)', accent2:'oklch(.78 .13 245)', btnFg:'#0e1013',
@@ -470,7 +470,7 @@ class Component extends DCLogic {
 
   TIMER_KEY = 'cadence.timer';
 
-  total() { const s = this.state; return s.durations[s.mode] * 60; }
+  total() { const s = this.state; return this.intervalSeconds || s.durations[s.mode] * 60; }
 
   componentDidMount() {
     const p = this.props.theme;
@@ -496,8 +496,17 @@ class Component extends DCLogic {
       this.onStoreChange(this.store.getState());
       this.store.ready.then(() => this.onStoreChange(this.store.getState()));
     }
-    this.restoreTimer();
+    this.componentDidUpdate();
     document.addEventListener('visibilitychange', this.onVisibility);
+  }
+
+  componentDidUpdate() {
+    window.CadenceTimerSnapshot = {
+      mode: this.state.mode, running: this.state.running, signedIn: !!this.state.user,
+      alarm: this.state.alarmActive, remaining: this.state.remaining, deadline: this.deadline || 0,
+      view: this.state.view
+    };
+    if (window.CadenceExperience) window.CadenceExperience.timer(window.CadenceTimerSnapshot);
   }
 
   componentWillUnmount() {
@@ -517,6 +526,16 @@ class Component extends DCLogic {
   onStoreChange = (st) => {
     if (!st) return;
     const cfg = st.settings || {};
+    const nextWorkspace = st.workspaceId || null;
+    const identityChanged = this.timerWorkspace !== nextWorkspace;
+    if (identityChanged) {
+      clearInterval(this.timer);
+      this.deadline = 0;
+      this.intervalId = null;
+      this.intervalSeconds = 0;
+      this.timerWorkspace = nextWorkspace;
+      this.TIMER_KEY = 'cadence.timer.' + (nextWorkspace || 'signed-out');
+    }
     const patch = {
       tasks: (st.tasks || []).filter(t => !t.deleted),
       analytics: st.analytics || null,
@@ -536,6 +555,7 @@ class Component extends DCLogic {
       // Keep an idle timer face in step with a duration edited on another tab.
       if (!this.state.running && this.state.remaining === this.total()) {
         patch.remaining = cfg.durations[this.state.mode] * 60;
+        this.intervalSeconds = patch.remaining;
       }
     }
     if (typeof cfg.autoStart === 'boolean') patch.autoStart = cfg.autoStart;
@@ -546,7 +566,8 @@ class Component extends DCLogic {
       patch.theme = cfg.theme;
       this.applyTheme(cfg.theme);
     }
-    this.setState(patch);
+    if (identityChanged) Object.assign(patch, { running: false, mode: 'focus', round: 1, remaining: (cfg.durations || this.state.durations).focus * 60 });
+    this.setState(patch, () => { if (identityChanged && st.user) this.restoreTimer(); });
   };
 
   persistSettings() {
@@ -564,12 +585,14 @@ class Component extends DCLogic {
    * count of ticks, so a throttled background tab, a sleeping laptop or a
    * full page reload all resume at the correct remaining time. */
   saveTimer() {
+    if (!this.state.user) return;
     try {
       const s = this.state;
       localStorage.setItem(this.TIMER_KEY, JSON.stringify({
+        id: this.intervalId || (this.intervalId = crypto.randomUUID()),
         mode: s.mode, round: s.round, running: s.running,
         remaining: s.remaining, deadline: this.deadline || 0,
-        startedAt: this.intervalStartedAt || 0, savedAt: Date.now()
+        planned: this.total(), startedAt: this.intervalStartedAt || 0, savedAt: Date.now()
       }));
     } catch (e) {}
   }
@@ -577,14 +600,16 @@ class Component extends DCLogic {
   restoreTimer() {
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem(this.TIMER_KEY) || 'null'); } catch (e) {}
+    this.intervalId = saved && saved.id || crypto.randomUUID();
     if (!saved || !saved.mode) { this.intervalStartedAt = Date.now(); return; }
 
     const mode = ['focus','short','long'].includes(saved.mode) ? saved.mode : 'focus';
+    this.intervalSeconds = Number.isFinite(saved.planned) && saved.planned >= 60 && saved.planned <= 3600 ? saved.planned : this.state.durations[mode] * 60;
     const round = Math.min(4, Math.max(1, saved.round || 1));
     this.intervalStartedAt = saved.startedAt || Date.now();
 
     if (saved.running && saved.deadline) {
-      const left = Math.round((saved.deadline - Date.now()) / 1000);
+      const left = Math.ceil((saved.deadline - Date.now()) / 1000);
       if (left > 0) {
         this.deadline = saved.deadline;
         this.setState({ mode, round, remaining: left, running: true });
@@ -598,7 +623,7 @@ class Component extends DCLogic {
     }
     this.setState({
       mode, round, running: false,
-      remaining: typeof saved.remaining === 'number' ? saved.remaining : this.state.durations[mode] * 60
+      remaining: Number.isFinite(saved.remaining) ? Math.max(0, Math.min(this.intervalSeconds, saved.remaining)) : this.intervalSeconds
     });
   }
 
@@ -630,7 +655,7 @@ class Component extends DCLogic {
 
   cursorLoop = () => {
     const ring = document.getElementById('pcRing'), dot = document.getElementById('pcDot');
-    if (ring && dot) {
+    if (ring && dot && document.documentElement.dataset.cursor === 'true' && document.visibilityState === 'visible') {
       const m = this.mouse, c = this.cur;
       const k = Math.max(0, Math.min(1, this.props.magnetStrength == null ? 0.55 : this.props.magnetStrength));
       const hit = k > 0.02 ? this.magnetFor(m.x, m.y) : null;
@@ -654,8 +679,8 @@ class Component extends DCLogic {
 
   /* ---------- wave canvas ---------- */
   drawWave = () => {
-    const c = this.canvas || (this.canvas = document.getElementById('waveCanvas'));
-    if (c) {
+    const c = this.canvas = document.getElementById('waveCanvas');
+    if (c && document.documentElement.dataset.wave !== 'false' && document.visibilityState === 'visible') {
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       const w = c.clientWidth, h = c.clientHeight;
       if (w && (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr))) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
@@ -666,7 +691,7 @@ class Component extends DCLogic {
       const frac = Math.max(0, Math.min(1, this.state.remaining / this.total()));
       this.fillFrac = this.fillFrac == null ? frac : this.fillFrac + (frac - this.fillFrac) * .07;
       const base = h * (1 - this.fillFrac);
-      const t = performance.now() / 1000;
+      const t = document.documentElement.dataset.motion === 'false' ? 0 : performance.now() / 1000;
       const amp = this.state.running ? 1 : .4;
       const layers = [
         { a: 10, len: 1.5, sp: .8, col: th.wave2, off: 7 },
@@ -717,7 +742,7 @@ class Component extends DCLogic {
    * gently with volume so it never becomes obnoxious just from turning the
    * alarm up. */
   pop(freq, dur, type, gain) {
-    if (!this.state.sound || this.state.volume <= 0) return;
+    if (!this.state.sound || this.state.volume <= 0 || document.documentElement.dataset.clickSounds === 'false') return;
     const peak = (gain == null ? .05 : gain) * (0.25 + this.state.volume * 1.25);
     this.playTone(freq, dur, type, peak);
   }
@@ -739,19 +764,19 @@ class Component extends DCLogic {
       case 'none': return;
       case 'bell': // classical — a slow, mellow four-note arpeggio
         this.alarmTone(523.25, .55, 'triangle', .3);
-        setTimeout(() => this.alarmTone(659.25, .55, 'triangle', .28), 260);
-        setTimeout(() => this.alarmTone(783.99, .6, 'triangle', .28), 520);
-        setTimeout(() => this.alarmTone(1046.5, .95, 'triangle', .32), 800);
+        this.queueAlarmTone(() => this.alarmTone(659.25, .55, 'triangle', .28), 260);
+        this.queueAlarmTone(() => this.alarmTone(783.99, .6, 'triangle', .28), 520);
+        this.queueAlarmTone(() => this.alarmTone(1046.5, .95, 'triangle', .32), 800);
         return;
       case 'digital': // siren — fast, jolting alarm-clock beeps
         this.alarmTone(1200, .12, 'square', .36);
-        setTimeout(() => this.alarmTone(1200, .12, 'square', .36), 160);
-        setTimeout(() => this.alarmTone(1200, .16, 'square', .38), 320);
-        setTimeout(() => this.alarmTone(1200, .2, 'square', .4), 480);
+        this.queueAlarmTone(() => this.alarmTone(1200, .12, 'square', .36), 160);
+        this.queueAlarmTone(() => this.alarmTone(1200, .16, 'square', .38), 320);
+        this.queueAlarmTone(() => this.alarmTone(1200, .2, 'square', .4), 480);
         return;
       default: // chime — soft, mild, unhurried
         this.alarmTone(660, .4, 'sine', .24);
-        setTimeout(() => this.alarmTone(880, .55, 'sine', .2), 240);
+        this.queueAlarmTone(() => this.alarmTone(880, .55, 'sine', .2), 240);
     }
   };
 
@@ -772,7 +797,14 @@ class Component extends DCLogic {
     tick();
   }
 
+  queueAlarmTone(fn, delay) {
+    if (!this.alarmNotes) this.alarmNotes = [];
+    this.alarmNotes.push(setTimeout(fn, delay));
+  }
+
   stopAlarm = () => {
+    (this.alarmNotes || []).forEach(clearTimeout);
+    this.alarmNotes = [];
     clearTimeout(this.alarmTimer);
     this.alarmTimer = null;
     if (this.state.alarmActive) this.setState({ alarmActive: false });
@@ -788,7 +820,7 @@ class Component extends DCLogic {
   /* ---------- timer ---------- */
   tick = () => {
     if (!this.deadline) return;
-    const left = Math.max(0, Math.round((this.deadline - Date.now()) / 1000));
+    const left = Math.max(0, Math.ceil((this.deadline - Date.now()) / 1000));
     if (left === this.state.remaining) return;
     this.setState({ remaining: left }, () => {
       this.saveTimer();
@@ -798,14 +830,17 @@ class Component extends DCLogic {
 
   setRunning(run) {
     clearInterval(this.timer);
+    let remaining = this.state.remaining;
     if (run) {
+      if (!this.intervalSeconds) this.intervalSeconds = this.state.durations[this.state.mode] * 60;
       this.deadline = Date.now() + this.state.remaining * 1000;
       if (!this.intervalStartedAt) this.intervalStartedAt = Date.now();
       this.timer = setInterval(this.tick, 500);
     } else {
+      if (this.deadline) remaining = Math.max(0, Math.ceil((this.deadline - Date.now()) / 1000));
       this.deadline = 0;
     }
-    this.setState({ running: run }, () => this.saveTimer());
+    this.setState({ running: run, remaining }, () => this.saveTimer());
   }
 
   toggleRun = () => {
@@ -821,6 +856,8 @@ class Component extends DCLogic {
     this.stopAlarm();
     this.setRunning(false);
     this.intervalStartedAt = Date.now();
+    this.intervalId = crypto.randomUUID();
+    this.intervalSeconds = this.state.durations[this.state.mode] * 60;
     this.setState({ remaining: this.total() }, () => this.saveTimer());
     this.pop(240, .12, 'square', .04);
     this.toast('Timer reset', this.modeName(this.state.mode));
@@ -835,6 +872,8 @@ class Component extends DCLogic {
     this.stopAlarm();
     this.setRunning(false);
     this.intervalStartedAt = Date.now();
+    this.intervalId = crypto.randomUUID();
+    this.intervalSeconds = this.state.durations.focus * 60;
     this.setState({ mode: 'focus', round: 1, remaining: this.state.durations.focus * 60 }, () => this.saveTimer());
     this.pop(200, .14, 'square', .05);
     this.toast('Timer reset', 'Back to round 1 · Focus');
@@ -855,9 +894,10 @@ class Component extends DCLogic {
     const task = this.activeTask();
     const startedAt = this.intervalStartedAt || (Date.now() - elapsedSec * 1000);
     this.store.logSession({
+      id: this.intervalId || (this.intervalId = crypto.randomUUID()),
       mode: s.mode,
       seconds: elapsedSec,
-      planned: s.durations[s.mode] * 60,
+      planned: this.total(),
       completed: elapsedSec >= 60,
       taskId: task ? task.id : null,
       category: task ? task.category : 'UNSORTED',
@@ -868,12 +908,15 @@ class Component extends DCLogic {
 
   complete(skipped) {
     const s = this.state;
-    const elapsed = Math.max(0, this.total() - s.remaining);
+    const left = s.running && this.deadline ? Math.max(0, Math.ceil((this.deadline - Date.now()) / 1000)) : s.remaining;
+    const elapsed = Math.max(0, this.total() - left);
     this.logInterval(elapsed);
 
+    this.intervalId = crypto.randomUUID();
     let mode, round = s.round;
     if (s.mode === 'focus') { mode = s.round >= 4 ? 'long' : 'short'; }
     else { mode = 'focus'; round = s.mode === 'long' ? 1 : Math.min(4, s.round + 1); }
+    this.intervalSeconds = s.durations[mode] * 60;
     clearInterval(this.timer);
     const run = s.autoStart && !skipped;
     this.intervalStartedAt = Date.now();
@@ -897,6 +940,8 @@ class Component extends DCLogic {
     clearInterval(this.timer);
     this.deadline = 0;
     this.intervalStartedAt = Date.now();
+    this.intervalId = crypto.randomUUID();
+    this.intervalSeconds = this.state.durations[m] * 60;
     this.setState({ mode: m, remaining: this.state.durations[m] * 60, running: false }, () => this.saveTimer());
     this.pop(520, .07, 'sine', .045);
     this.toast(this.modeName(m), this.state.durations[m] + ' minute interval');
@@ -917,6 +962,7 @@ class Component extends DCLogic {
       '--fg3':t.fg3, '--pill':t.pill, '--accent':t.accent, '--accent2':t.accent2, '--glow':t.glow, '--ring':t.ring, '--btn-fg':t.btnFg };
     Object.keys(map).forEach(k => r.setProperty(k, map[k]));
     document.body.style.background = t.bg;
+    document.documentElement.dataset.theme = id;
   }
 
   /* ---------- sliders ---------- */
@@ -929,7 +975,9 @@ class Component extends DCLogic {
       if (v === this.state.durations[key]) return;
       this.setState(s => {
         const durations = Object.assign({}, s.durations, { [key]: v });
-        return { durations, remaining: (!s.running && s.mode === key) ? v * 60 : s.remaining };
+        const idle = !s.running && s.mode === key && s.remaining === this.total();
+        if (idle) this.intervalSeconds = v * 60;
+        return { durations, remaining: idle ? v * 60 : s.remaining };
       });
       this.pop(320 + v * 6, .025, 'square', .022);
     };
@@ -1126,7 +1174,7 @@ class Component extends DCLogic {
       themeMenuOpen: s.themeMenuOpen,
       themeList: Object.keys(this.themes).map(id => {
         const t = this.themes[id], on = id === s.theme;
-        return { id, name: t.name, s1: t.bg, s2: t.accent, s3: t.accent2,
+        return { id, name: t.name, preview: 'radial-gradient(ellipse at 24% 85%,'+t.accent+' 0%,transparent 65%),linear-gradient(140deg,'+t.bg+' 8%,'+t.accent2+' 170%)', s1: t.bg, s2: t.accent, s3: t.accent2,
           bg: on ? th.pill : 'transparent', c: on ? th.fg : th.fg2, tick: on ? th.accent : 'transparent',
           cardB: on ? th.accent : th.cardB, cardBg: on ? th.pill : 'transparent', go: this.setTheme(id) };
       }),
@@ -1136,7 +1184,7 @@ class Component extends DCLogic {
       modeLabel: this.modeName(s.mode).toUpperCase(),
       timeText: (mm < 10 ? '0' + mm : '' + mm) + ':' + (ss < 10 ? '0' + ss : '' + ss),
       statusText: s.running ? 'in progress' : (s.remaining === this.total() ? 'ready when you are' : 'paused'),
-      runLabel: s.running ? 'Pause' : (s.remaining === this.total() ? 'Start focus' : 'Resume'),
+      runLabel: s.running ? 'Pause' : (s.remaining === this.total() ? (s.mode === 'focus' ? 'Start focus' : 'Start break') : 'Resume'),
       toggleRun: this.toggleRun, reset: this.reset, skip: this.skip, resetAll: this.resetAll,
       dots: [1, 2, 3, 4].map(n => ({
         w: n === s.round ? 26 : 8,

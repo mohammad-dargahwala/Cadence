@@ -1,0 +1,69 @@
+/* Cadence's atmosphere and compact player share the active theme palette. */
+:root{--btn-fg:#0e1013}
+*{cursor:auto!important;box-sizing:border-box}
+button,a,input[type=checkbox],select{cursor:pointer!important}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent)!important;outline-offset:4px}
+html[data-cursor=true] *,html[data-cursor=true] button{cursor:none!important}
+html:not([data-cursor=true]) #pcRing,html:not([data-cursor=true]) #pcDot{display:none!important}
+#atmosphere{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;opacity:.85;transition:opacity .8s}
+html[data-background=false] #atmosphere{display:none}
+html[data-wave=false] #waveCanvas{visibility:hidden}
+html[data-details=false] .timer-detail{display:none!important}
+html[data-motion=false] *,html[data-motion=false] *:before,html[data-motion=false] *:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+.theme-preview{width:100%;height:65px;border-radius:9px;position:relative;overflow:hidden;border:1px solid #ffffff16}
+.theme-preview:after{content:'';position:absolute;width:110%;height:90%;border-radius:50%;border:1px solid #ffffff42;left:-5%;top:45%;transform:rotate(-14deg);box-shadow:0 8px 0 #ffffff0b,0 16px 0 #ffffff0b,0 24px 0 #ffffff0b}
+cadence-settings{display:block;grid-column:1/-1}
+.experience-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.ex-card{padding:26px;border:1px solid var(--card-b);border-radius:18px;background:var(--card);backdrop-filter:blur(24px);color:var(--fg)}
+.ex-card h2{font-size:14px;margin:0 0 8px;font-weight:600}
+.ex-card p,.ex-help{font-size:12px;line-height:1.7;color:var(--fg2);margin:0 0 18px}
+.ex-eyebrow{font:10px 'IBM Plex Mono',monospace;letter-spacing:.15em;color:var(--fg3);margin-bottom:12px}
+.ex-row{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:13px 0;border-bottom:1px solid var(--card-b);font-size:13px}
+.ex-row:last-child{border-bottom:0}
+.ex-row small{display:block;color:var(--fg2);font-size:11px;line-height:1.6;margin-top:4px}
+.ex-row input[type=checkbox]{appearance:none;flex-shrink:0;width:40px;height:23px;border-radius:20px;background:var(--pill);border:1px solid var(--card-b);position:relative;margin:0}
+.ex-row input[type=checkbox]:before{content:'';width:15px;height:15px;position:absolute;top:3px;left:3px;border-radius:50%;background:var(--fg2);transition:transform .2s}
+.ex-row input:checked{background:var(--accent)}
+.ex-row input:checked:before{background:var(--btn-fg);transform:translateX(17px)}
+.ex-card select,.ex-card input[type=text]{border:1px solid var(--card-b);border-radius:9px;padding:10px;background:var(--bg2);color:var(--fg);font:12px inherit;max-width:100%}
+.ex-card select{min-width:130px}
+.ex-button{border:1px solid var(--card-b);background:var(--pill);color:var(--fg);border-radius:10px;padding:10px 14px;font:500 12px 'Instrument Sans',sans-serif}
+.ex-button.primary{background:var(--accent);color:var(--btn-fg);border:0}
+.ex-setup{margin-top:18px;border-top:1px solid var(--card-b);padding-top:16px;font-size:12px;line-height:1.7;color:var(--fg2)}
+.ex-setup summary{color:var(--fg);cursor:pointer!important}
+.ex-setup ol{padding-left:18px}
+.ex-setup code{overflow-wrap:anywhere;color:var(--accent);font-size:11px}
+.ex-setup input{width:100%;margin:10px 0}
+.music-status{color:var(--fg2);font-size:11px;line-height:1.5;margin-top:12px;min-height:17px}
+#cadence-music{position:fixed;right:24px;bottom:22px;z-index:150;max-width:350px;border:1px solid var(--card-b);border-radius:18px;background:var(--bg2);box-shadow:0 14px 45px #0003;padding:14px;display:flex;gap:12px;align-items:center;color:var(--fg)}
+#cadence-music[hidden]{display:none}
+.music-art{width:58px;height:58px;object-fit:cover;border-radius:9px;flex-shrink:0;background:var(--pill)}
+.music-art-link{flex-shrink:0;display:block}.music-placeholder{display:grid;place-items:center;width:58px;height:58px;border-radius:9px;background:var(--pill);color:var(--accent);font-size:28px}
+.music-placeholder[hidden],.music-art[hidden],.music-title[hidden]{display:none!important}
+.music-body{min-width:0}
+.music-title{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:215px;margin:4px 0}
+.music-artist{color:var(--fg2);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:215px}
+.music-brand{font-size:9px;letter-spacing:.1em;color:var(--fg3);display:flex;align-items:center;gap:5px}
+.music-brand svg{width:13px;height:13px;fill:currentColor}
+.music-controls{display:flex;align-items:center;gap:4px;margin-top:5px}
+.music-controls button{border:0;background:transparent;color:var(--fg);border-radius:50%;width:32px;height:32px;padding:7px;display:grid;place-items:center}
+.music-controls button:hover{background:var(--pill)}
+.music-controls button:disabled{opacity:.35;cursor:default!important}
+.music-controls svg{width:16px;height:16px;fill:currentColor}
+#cadence-music[data-mode=hide] .music-art,#cadence-music[data-mode=hide] .music-brand,#cadence-music[data-mode=hide] .music-title,#cadence-music[data-mode=hide] .music-artist{display:none}
+#cadence-music[data-mode=hide] .music-art-link,#cadence-music[data-mode=minimalist] .music-art-link{display:none}
+#cadence-music[data-mode=minimalist] .music-art,#cadence-music[data-mode=minimalist] .music-brand,#cadence-music[data-mode=minimalist] .music-artist,#cadence-music[data-mode=minimalist] .seek-control{display:none}
+#cadence-music[data-mode=artwork]{padding:8px;flex-direction:column;gap:5px;max-width:150px}
+#cadence-music[data-mode=artwork] .music-art{width:94px;height:94px}
+#cadence-music[data-mode=artwork] .music-placeholder{width:94px;height:94px}
+#cadence-music[data-mode=artwork] .music-controls,#cadence-music[data-mode=artwork] .music-brand,#cadence-music[data-mode=artwork] .music-artist{display:none}
+#cadence-music[data-mode=artwork] .music-title{max-width:125px;text-align:center}
+@media(pointer:coarse){*{cursor:auto!important}#pcRing,#pcDot{display:none!important}}
+@media(max-width:700px){
+  .experience-grid{grid-template-columns:1fr}.ex-card{padding:20px}
+  .app-shell{padding:0 18px 130px!important}.app-shell header{flex-wrap:wrap;gap:15px!important}.app-shell header nav{order:3;width:100%;justify-content:space-between}.app-shell header nav button{width:calc((100vw - 54px)/4)!important}.app-shell header nav>div{display:none}
+  .settings-grid{grid-template-columns:1fr!important}.timer-actions{flex-wrap:wrap;justify-content:center;max-width:360px}.timer-face{width:min(340px,85vw)!important;height:min(340px,85vw)!important}
+  .timer-detail{max-width:90vw;flex-wrap:wrap;justify-content:center}.app-shell section[style*="repeat(4"]{grid-template-columns:1fr 1fr!important}
+  #cadence-music{right:12px;bottom:12px;max-width:calc(100vw - 24px)}
+}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}

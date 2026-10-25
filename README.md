@@ -14,6 +14,20 @@ Pin a task to show it on the timer. Tasks can be added, completed, or deleted. N
 
 Analytics count focus intervals with at least a minute recorded, including ones ended with Skip. Breaks are saved but left out of focus totals. The Analytics tab shows daily time, session counts, streaks, weekly totals, and a category breakdown.
 
+## Themes and minimalist settings
+
+The eight themes include Aurora (flowing light), Solstice (sunset dunes), Sakura (drifting petals), and Tidal (ocean contours). Their backgrounds are drawn locally on a canvas. Settings → Minimalist lets you turn backgrounds, movement, the timer wave, cursor effects, round/task details, and interface sounds on or off. System reduced-motion preferences are respected.
+
+The original background scenes take visual cues from [James Turrell's light fields](https://web.guggenheim.org/exhibitions/turrell/) and [teamLab's Black Waves](https://www.teamlab.art/w/black_waves/); no artwork is copied or downloaded.
+
+## Spotify
+
+Settings → Spotify includes setup instructions and an exact redirect URI for a Spotify Developer app. Paste its public Client ID and authorize with Spotify. No client secret is needed. Choose a song and an active device in Spotify first; Cadence controls that device through the Web API.
+
+The player can be Off, controls only (Hide), Minimalist, Full, or album cover only, with a separate song-name toggle. Playback resumes during a running focus interval and pauses on timer pause/reset, interval completion, breaks, Off, disconnect, and sign-out. A manual music pause lasts until the next focus block. Keep Cadence open and online for automation; closed or suspended browsers cannot reliably control another device.
+
+Spotify playback control requires Premium. Development-mode apps also require a Premium app owner and an allowlisted listener; see [Spotify's quota modes](https://developer.spotify.com/documentation/web-api/concepts/quota-modes). Authorization uses [PKCE](https://developer.spotify.com/documentation/web-api/tutorials/code-pkce-flow). Tokens are scoped to the signed-in workspace in this browser tab's session storage, excluded from Cadence sync, and cleared on sign-out or disconnect.
+
 ## Accounts and saving
 
 Choose a name and a 4–8 digit PIN when you register. The same login on another device brings back your tasks, settings, and saved sessions.
@@ -36,7 +50,7 @@ npm run dev
 
 Open the URL printed by Wrangler, normally `http://localhost:8787`. This uses a local D1 database with its own accounts.
 
-`npm test` runs the analytics and local Worker API tests. The Python browser checks in `test/browser.test.py` need Playwright and a Chrome executable and are not part of that command.
+`npm test` runs analytics, timer/appearance regressions, mocked Spotify playback checks, and local Worker API tests. Spotify checks use a fake clock and mocked transport, not a live Spotify account. The Python browser checks in `test/browser.test.py` need Playwright and a Chrome executable and are not part of that command.
 
 ## Hosting a copy
 
