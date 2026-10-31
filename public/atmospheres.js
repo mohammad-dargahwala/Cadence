@@ -181,10 +181,11 @@
   window.CadenceAtmospheres={draw(c,w,h,t,id){
     if(c.canvas&&c.canvas.dataset)c.canvas.dataset.artTime=t.toFixed(3);
     c.save();c.clearRect(0,0,w,h);
-    if(window.CadenceWorlds && window.CadenceWorlds.draw(c,w,h,t,id)){c.restore();return;}
-    if(window.CadenceFlow){
+    const custom=window.CadenceWorlds && window.CadenceWorlds.draw(c,w,h,t,id);
+    if(!custom&&window.CadenceFlow){
       if(id==='sakura')livingCherry(c,w,h,t);else if(id==='solstice'){if(!window.CadenceFlow.paint(c,w,h,t)){paintRiver(c,w,h,t*4);window.CadenceFlow.particles(c,w,h,t,'paint');}}else if(id==='aurora')livingStars(c,w,h,t);else if(id==='tidal')livingForest(c,w,h,t);else classic(c,w,h,t,id);
-    }else if(id==='sakura')cherry(c,w,h,t);else if(id==='solstice')paintRiver(c,w,h,t);else if(id==='aurora')stars(c,w,h,t);else if(id==='tidal')fireflies(c,w,h,t);else classic(c,w,h,t,id);
+    }else if(!custom){if(id==='sakura')cherry(c,w,h,t);else if(id==='solstice')paintRiver(c,w,h,t);else if(id==='aurora')stars(c,w,h,t);else if(id==='tidal')fireflies(c,w,h,t);else classic(c,w,h,t,id);}
+    if(window.CadenceSceneEvents&&!['horizon','abyss','rain'].includes(id))window.CadenceSceneEvents.draw(c,w,h,t,id);
     c.restore();
-  },drawTimer(c,w,h,t,id,fraction){if(c.canvas&&c.canvas.dataset)c.canvas.dataset.artTime=t.toFixed(3);if(window.CadenceFlow)window.CadenceFlow.timer(c,w,h,t,id,fraction);}};
+  },drawTimer(c,w,h,t,id,fraction){if(c.canvas&&c.canvas.dataset)c.canvas.dataset.artTime=t.toFixed(3);if(window.CadenceFlow)window.CadenceFlow.timer(c,w,h,t,id,fraction);if(window.CadenceSceneEvents)window.CadenceSceneEvents.timer(c,w,h,t,id);}};
 })();

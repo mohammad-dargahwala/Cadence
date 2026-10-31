@@ -137,7 +137,8 @@ function harness(transport='web',reduceMotion=false) {
     setInterval:()=>++index,clearInterval(){},setTimeout:(fn)=>{timers.set(++index,fn);return index;},clearTimeout:id=>timers.delete(id)});
   const c=new Component();c.pop=()=>{};c.toast=()=>{};c.startAlarm=()=>{};
   c.store={logSession:e=>logged.push(e),getState:()=>({sessions:[]}),saveSettings(){}};c.state.user='Tester';c.TIMER_KEY='timer-a';
-  assert.equal(Object.keys(c.themes).length,9,'nine worlds available');
+  assert.equal(Object.keys(c.themes).length,12,'twelve worlds available');
+  for(const id of ['polar','rain','dunes']){c.setTheme(id)();assert.equal(c.state.theme,id,'new theme can be selected');}
   c.setTheme('clay')();assert.equal(c.state.theme,'valley','retired selection resolves to a painted world');c.setTheme('nebula')();
   c.setRunning(true);clock+=1499700;c.tick();assert.equal(c.state.remaining,1,'timer never finishes half a second early');clock+=300;c.tick();assert.equal(c.state.mode,'short');assert.equal(logged[0].seconds,1500);
   c.setMode('long')();assert.equal(c.renderVals().runLabel,'Start break','break action uses correct label');

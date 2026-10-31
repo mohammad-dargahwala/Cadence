@@ -13,6 +13,8 @@
 <script src="./sync.js"></script>
 <link rel="stylesheet" href="./experience.css">
 <script src="./flow-engine.js" defer></script>
+<script src="./extra-worlds.js" defer></script>
+<script src="./scene-events.js" defer></script>
 <script src="./atmospheres.js" defer></script>
 <script src="./experience.js" defer></script>
 </head>
@@ -121,7 +123,7 @@ a:hover{color:var(--accent2)}
           <span style="font:400 9px 'IBM Plex Mono',monospace;color:var(--fg3)">▾</span>
         </button>
         <sc-if value="{{ themeMenuOpen }}" hint-placeholder-val="{{ false }}">
-          <div style="position:absolute;top:46px;right:0;width:196px;padding:6px;background:var(--bg2);border:1px solid var(--card-b);border-radius:14px;box-shadow:0 24px 60px -18px rgba(0,0,0,.55);z-index:50;animation:tin .38s cubic-bezier(.34,1.4,.5,1)">
+          <div style="position:absolute;top:46px;right:0;width:210px;max-height:min(70vh,480px);overflow-y:auto;padding:6px;background:var(--bg2);border:1px solid var(--card-b);border-radius:14px;box-shadow:0 24px 60px -18px rgba(0,0,0,.55);z-index:50;animation:tin .38s cubic-bezier(.34,1.4,.5,1)">
             <sc-for list="{{ themeList }}" as="th" hint-placeholder-count="4">
               <button data-magnet="1" onClick="{{ th.go }}" style="display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;background:{{ th.bg }};border:0;border-radius:10px;color:{{ th.c }};font:500 12.5px 'Instrument Sans',sans-serif;text-align:left" style-hover="background:var(--pill)">
                 <span style="display:flex;gap:3px">
@@ -371,7 +373,7 @@ a:hover{color:var(--accent2)}
         </div>
 
         <div style="display:flex;flex-direction:column;gap:18px;padding:26px;background:var(--card);border:1px solid var(--card-b);border-radius:18px;backdrop-filter:blur(20px)">
-          <span style="font:600 14px 'Instrument Sans',sans-serif;color:var(--fg)">Appearance · nine living worlds</span>
+          <span style="font:600 14px 'Instrument Sans',sans-serif;color:var(--fg)">Appearance · twelve living worlds</span>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
             <sc-for list="{{ themeList }}" as="th" hint-placeholder-count="4">
               <button data-magnet="1" onClick="{{ th.go }}" style="display:flex;flex-direction:column;gap:12px;padding:14px;border:1.5px solid {{ th.cardB }};border-radius:15px;background:{{ th.cardBg }};text-align:left;transition:transform .25s cubic-bezier(.34,1.4,.5,1),border-color .3s" style-hover="transform:translateY(-3px)" style-active="transform:scale(.96)">
@@ -431,7 +433,7 @@ a:hover{color:var(--accent2)}
 </div>
 
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;nebula&quot;,&quot;horizon&quot;,&quot;valley&quot;,&quot;abyss&quot;,&quot;lantern&quot;,&quot;sakura&quot;,&quot;solstice&quot;,&quot;aurora&quot;,&quot;tidal&quot;],&quot;default&quot;:&quot;nebula&quot;,&quot;tsType&quot;:&quot;'nebula'|'horizon'|'valley'|'abyss'|'lantern'|'sakura'|'solstice'|'aurora'|'tidal'&quot;,&quot;section&quot;:&quot;Appearance&quot;},&quot;ambientMotion&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Appearance&quot;},&quot;magnetStrength&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:0.55,&quot;min&quot;:0,&quot;max&quot;:1,&quot;step&quot;:0.05,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Cursor&quot;}}">
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;nebula&quot;,&quot;horizon&quot;,&quot;valley&quot;,&quot;abyss&quot;,&quot;lantern&quot;,&quot;sakura&quot;,&quot;solstice&quot;,&quot;aurora&quot;,&quot;tidal&quot;,&quot;polar&quot;,&quot;rain&quot;,&quot;dunes&quot;],&quot;default&quot;:&quot;nebula&quot;,&quot;tsType&quot;:&quot;'nebula'|'horizon'|'valley'|'abyss'|'lantern'|'sakura'|'solstice'|'aurora'|'tidal'|'polar'|'rain'|'dunes'&quot;,&quot;section&quot;:&quot;Appearance&quot;},&quot;ambientMotion&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Appearance&quot;},&quot;magnetStrength&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:0.55,&quot;min&quot;:0,&quot;max&quot;:1,&quot;step&quot;:0.05,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Cursor&quot;}}">
 class Component extends DCLogic {
   themes = window.CadenceWorlds.themes;
 

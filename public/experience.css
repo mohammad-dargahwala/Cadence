@@ -47,6 +47,15 @@ html[data-motion=false] *,html[data-motion=false] *:before,html[data-motion=fals
 [data-theme=lantern] .timer-face{background:#e9b082!important;border-color:#f9d2a096!important;box-shadow:0 15px 100px -10px #f9b65a52,inset 0 1px 0 #ffe9c4!important}
 [data-theme=lantern] .timer-numerals{font:400 76px/1 Georgia,serif!important;letter-spacing:-.055em!important;color:#5f3740!important}
 [data-theme=lantern] .timer-mode,[data-theme=lantern] .timer-status{color:#78444ccf!important}
+[data-theme=polar] .timer-face{background:#0b2330!important;border-color:#9aeccf65!important;box-shadow:0 0 85px -10px #75dfc74a,inset 0 0 45px #b5b1ec18!important}
+[data-theme=polar] .timer-numerals{font-family:'Instrument Sans',sans-serif!important;font-weight:400!important;letter-spacing:-.05em!important;color:#e2fff3!important;text-shadow:0 0 28px #98e8ce55}
+[data-theme=polar] .timer-mode,[data-theme=polar] .timer-status{color:#c3e8df!important}
+[data-theme=rain] .timer-face{background:#1c3041!important;border-color:#c2e1ec60!important;box-shadow:0 25px 90px -25px #020d24b3,inset 0 0 35px #b3d5e723!important}
+[data-theme=rain] .timer-numerals{font-family:'IBM Plex Mono',monospace!important;font-size:67px!important;font-weight:400!important;letter-spacing:-.065em!important;color:#ecf5f7!important;text-shadow:0 2px 18px #07121e}
+[data-theme=rain] .timer-mode,[data-theme=rain] .timer-status{color:#c5dce7!important}
+[data-theme=dunes] .timer-face{background:#efd3ab!important;border-color:#fff0caa3!important;box-shadow:0 30px 85px -30px #805a4970,inset 0 1px 2px #fff5dc!important}
+[data-theme=dunes] .timer-numerals{font:italic 400 80px/1 Georgia,serif!important;letter-spacing:-.055em!important;color:#654a36!important;text-shadow:0 1px 16px #ffedcd}
+[data-theme=dunes] .timer-mode,[data-theme=dunes] .timer-status{color:#745840!important}
 .desktop-setup[hidden],.web-setup[hidden]{display:none!important}
 .desktop-setup a.ex-button{display:inline-block;text-decoration:none}
 .desktop-setup .open-desktop[hidden]{display:none!important}

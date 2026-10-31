@@ -16,10 +16,10 @@ Analytics count focus intervals with at least a minute recorded, including ones 
 
 ## Themes and minimalist settings
 
-Nine named worlds, each with its own moving artwork and countdown dial:
+Twelve named worlds, each with its own moving artwork, countdown dial, and passing signature events:
 
 - **Nebula Bloom** — evolving violet and turquoise gas clouds and a luminous starlit lens.
-- **Event Horizon** — an incandescent accretion disk, a bent halo and a dark timekeeping core.
+- **Event Horizon** — continuous inward particle streams, a layered accretion disk, comet captures with fragmenting tails, and rare distant supernova shockwaves.
 - **Painted Valley** — oil-brushed mountains, soft Gaussian mist and flowing water, with a warm landscape medallion.
 - **Abyssal Ballet** — translucent jellyfish with independently moving tentacles, and a glowing bell-shaped dial.
 - **Lantern Drift** — rising paper lanterns over a twilight lake and a warm ribbed paper timer.
@@ -27,12 +27,21 @@ Nine named worlds, each with its own moving artwork and countdown dial:
 - **Rivers of Color** — evolving marbled pigment and a morphing paint droplet.
 - **Stardust** — integrated particle trails and precessing orbital rings.
 - **Firefly Grove** — layered woodland and a glass fern terrarium.
+- **Aurora Veil** — folded green/violet curtains over a frozen lake, a luminous ribbon dial, and occasional auroral crowns.
+- **Rainlit Window** — refracting drops over original blurred city artwork, a clear glass countdown, merging raindrops, and passing headlights.
+- **Dune Reverie** — warm sculpted dunes, fine drifting sand, a sand medallion, distant dust devils, and ridge gusts.
+
+The other worlds have their own moments: star births and dust waves in Nebula Bloom; bird flocks and sunbreaks in Painted Valley; glowing fish and bioluminescent pulses in Abyssal Ballet; lantern releases and lake breezes in Lantern Drift; blossom gusts in Cherry Blossom; pigment blooms and folds in Rivers of Color; meteors and constellations in Stardust; and firefly waves and falling leaves in Firefly Grove. Events vary their timing and paths. Comets arrive 20–40 art seconds apart and supernovae 90–150 art seconds apart; Gentle and Expressive pace scale those times. Events and their dial reactions use the same accumulated clock as ambient movement, so pause/reduced motion freezes them and hidden tabs do not skip ahead. Dial overlays leave a clear central area for the digits.
+
+The gallery has a **Preview event** button for every world. Successive clicks cycle through that world's moments without seeking or restarting its ambient artwork; previewing explicitly resumes gallery motion. The gallery starts paused when the system requests reduced motion. Normal timer scenes need no interaction to receive events.
 
 The old Graphite, Ember, Mist and Clay selections are retired. Saved Graphite maps to Nebula Bloom, Ember to Lantern Drift, and Mist/Clay to Painted Valley. Existing animated selections stay intact.
 
 The scenes use local canvas artwork, evolving GPU gas/pigment fields and canvas fallbacks. A shared, accumulated art clock keeps backgrounds and timers continuous through settings/sync updates, pace changes and pause/resume. Smooth nonperiodic fields and independently regenerated travelers give each new lantern, jellyfish, ripple and particle a fresh route; entrances and exits fade without a scene restart. Particle trails use elapsed-time fading, and the shared GPU drawing buffer stays allocated between background, timer and thumbnail renders. Main scenes and timer artwork follow display frames. Painted Valley layers moving mist, light and water over a bundled oil painting created with the built-in image generation tool; its prompt is in `public/art/README.md`. Minimalist settings control backgrounds, motion, timer artwork, cursor effects, details and sounds. Flow mode runs while the timer is idle. Choose Gentle, Fluid or Expressive pace, pause it explicitly, or enable Follow system reduced motion. Settings links to a music-free gallery at `/living-themes.html`, with a scene-only view and countdown scrubber. Only visible gallery scenes animate.
 
 Visual references include [NASA's black hole accretion disk visualization](https://svs.gsfc.nasa.gov/13326/), [Webb's Cosmic Cliffs](https://esawebb.org/images/weic2205a/), and [Cézanne's mountain/valley oil painting at the Met](https://www.metmuseum.org/art/collection/search/435877). These inform the original generated compositions; no reference images or videos are embedded. The black hole is an artistic interpretation. Earlier scenes take inspiration from [Refik Anadol](https://refikanadol.com/works/unsupervised/) and [teamLab](https://www.teamlab.art/).
+
+New procedural scenes take visual inspiration from [NASA's aurora curtains and colors](https://science.nasa.gov/sun/auroras/), [Lucas Bebber's rain and water experiments for Codrops](https://tympanus.net/codrops/2015/11/04/rain-water-effect-experiments/), and [NASA's wind-sculpted dune ripples](https://science.nasa.gov/resource/two-sizes-of-ripples-on-surface-of-martian-sand-dune/). Their artwork and event renderers are original local canvas code; reference assets and code are not bundled.
 
 ## Alarm sounds
 
