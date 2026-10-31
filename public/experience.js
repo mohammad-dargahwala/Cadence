@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const defaults = { minimalist:false, background:true, motion:true, followSystemMotion:false, flowSpeed:1, wave:true, cursor:false, details:true, clickSounds:true, musicMode:'off', songName:true, musicSource:'desktop' };
+  const defaults = { minimalist:false, background:true, motion:true, followSystemMotion:false, flowSpeed:1, wave:true, cursor:false, details:true, clickSounds:true, musicMode:'off', songName:true, musicSource:'desktop', artworkLookup:true };
   const store = window.CadenceStore;
   const root = document.documentElement;
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
@@ -152,7 +152,7 @@
   }
   function desktopState(data) {
     desktopControls=data.controls||{};
-    return data.available ? {is_playing:data.playing,progress_ms:data.positionMs,item:{id:data.trackKey,name:data.title||'Spotify',duration_ms:data.durationMs,artists:[{name:data.artist||''}],album:{images:data.artwork?[{url:data.artwork}]:[]},external_urls:{spotify:'https://open.spotify.com'}}}:null;
+    return data.available ? {is_playing:data.playing,progress_ms:data.positionMs,item:{id:data.trackKey,name:data.title||'Spotify',duration_ms:data.durationMs,artists:[{name:data.artist||''}],album:{name:data.album||'',images:data.artwork?[{url:data.artwork}]:[]},external_urls:{spotify:'https://open.spotify.com'}}}:null;
   }
   async function desktopAPI(path,method,guard) {
     if(!desktopReady) throw Error('Connect the Windows desktop helper in Settings first.');
@@ -232,6 +232,65 @@
   };
   function svg(name) { if(name==='like')return '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></svg>';return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="'+icons[name]+'"/></svg>'; }
   let player,likeBusy=false;
+  const artworkCache=new Map(),artworkFailures=new Map();
+  let artworkPending=null;
+  function artworkFailed(url) {return (artworkFailures.get(url)||0)>Date.now();}
+  function albumKey(item) {
+    const album=item && item.album && item.album.name,artist=item && item.artists && item.artists[0] && item.artists[0].name;
+    return album&&artist ? JSON.stringify([album.trim().toLowerCase(),artist.trim().toLowerCase()]) : '';
+  }
+  function nativeArtwork(item) {
+    return (item && item.album && item.album.images || []).map(artworkURL).find(url=>url&&!artworkFailed(url))||'';
+  }
+  function cachedArtwork(item) {
+    if(!prefs.artworkLookup||prefs.musicSource!=='desktop')return null;
+    const entry=artworkCache.get(albumKey(item));
+    return entry&&entry.until>Date.now()&&entry.url&&!artworkFailed(entry.url)?entry:null;
+  }
+  function lookupArtwork(item) {
+    const key=albumKey(item),cached=artworkCache.get(key);
+    if(!key||!timer.signedIn||prefs.musicMode==='off'||prefs.musicSource!=='desktop'||!prefs.artworkLookup||document.hidden||nativeArtwork(item)||artworkPending||(cached&&cached.until>Date.now()))return;
+    const owner=account,album=item.album.name,artist=item.artists[0].name;
+    artworkPending=key;
+    void (async()=>{
+      let entry;
+      try{
+        const r=await fetch('/api/artwork',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({album,artist}),signal:AbortSignal.timeout(24000)});
+        if(!r.ok)throw Error('Artwork lookup unavailable');
+        const result=await r.json(),url=artworkURL(result);
+        entry={url,source:result.source,sourceUrl:result.sourceUrl,until:Date.now()+(url?86400000:Math.max(60,Math.min(900,Number(result.retryAfter)||900))*1000)};
+      }catch{entry={url:'',until:Date.now()+60000};}
+      if(owner===account){
+        artworkCache.set(key,entry);
+        if(artworkCache.size>40)artworkCache.delete(artworkCache.keys().next().value);
+      }
+    })().finally(()=>{
+      artworkPending=null;
+      if(owner===account)renderPlayer();
+    });
+  }
+  function artworkURL(art) {
+    const url=art && art.url;
+    return typeof url==='string' && (/^https:\/\//.test(url) || (prefs.musicSource==='desktop' && /^data:image\/(png|jpeg);base64,/.test(url))) ? url : '';
+  }
+  function renderArtwork(image,placeholder,url) {
+    if(image.dataset.artworkSource===url)return;
+    image.dataset.artworkSource=url;image.hidden=true;placeholder.hidden=false;
+    image.onload=()=>{
+      if(image.dataset.artworkSource!==url||!url)return;
+      image.hidden=false;placeholder.hidden=true;
+    };
+    image.onerror=()=>{
+      if(image.dataset.artworkSource!==url)return;
+      image.hidden=true;placeholder.hidden=false;
+      if(url){artworkFailures.set(url,Date.now()+60000);if(artworkFailures.size>64)artworkFailures.delete(artworkFailures.keys().next().value);}
+      lookupArtwork(track);
+    };
+    if(url){
+      image.src=url;
+      if(image.complete&&image.naturalWidth>0)image.onload();
+    }else image.removeAttribute('src');
+  }
   function renderPlayer() {
     if(!player) {
       player=document.createElement('aside'); player.id='cadence-music'; player.setAttribute('aria-label','Focus music player');
@@ -246,10 +305,13 @@
     player.hidden=!timer.signedIn || prefs.musicMode==='off' || timer.view!=='timer';
     player.dataset.mode=prefs.musicMode;
     const image=player.querySelector('img'), title=player.querySelector('.music-title');
-    const art=track && track.album && track.album.images && track.album.images[0];
-    image.hidden=!art; if(art && (/^https:\/\//.test(art.url) || (prefs.musicSource==='desktop' && /^data:image\/(png|jpeg);base64,/.test(art.url)))) image.src=art.url;
-    player.querySelector('.music-placeholder').hidden=!!art;
+    const fallback=cachedArtwork(track),art=nativeArtwork(track)||fallback&&fallback.url||'';
+    renderArtwork(image,player.querySelector('.music-placeholder'),art);
+    lookupArtwork(track);
     player.querySelector('.music-art-link').href=track && track.external_urls && track.external_urls.spotify || 'https://open.spotify.com';
+    const artLink=player.querySelector('.music-art-link');
+    artLink.title=fallback&&!nativeArtwork(track)?'Album artwork from Cover Art Archive · MusicBrainz':'Open album in Spotify';
+    if(fallback&&!nativeArtwork(track)&&/^https:\/\/musicbrainz\.org\/release-group\/[a-f0-9-]+$/.test(fallback.sourceUrl||''))artLink.href=fallback.sourceUrl;
     title.textContent=track ? track.name : connected() ? 'Choose a song in Spotify' : 'Set up music in Settings';
     title.href=track && track.external_urls && track.external_urls.spotify || 'https://open.spotify.com';
     title.onclick=!connected() ? e=>{e.preventDefault();const settings=Array.from(document.querySelectorAll('nav button')).find(b=>b.textContent.trim()==='Settings');if(settings)settings.click();}:null;
@@ -325,6 +387,9 @@
         const small=document.createElement('small'); small.textContent=help; span.append(small);
         const input=document.createElement('input'); input.type='checkbox'; input.dataset.pref=key; l.append(span,input); this.querySelector('.visual-toggles').append(l);
       }
+      const lookup=document.createElement('label');lookup.className='ex-row';
+      lookup.innerHTML='<span>Look up missing covers<small>Search MusicBrainz / Cover Art Archive using album and artist names when Spotify supplies no image.</small></span><input type="checkbox" data-pref="artworkLookup">';
+      this.querySelector('.music-status').before(lookup);
       this.querySelector('.redirect-uri').textContent=redirectURI();
       try { this.querySelector('.spotify-client').value=localStorage.getItem('cadence.spotify.clientId')||''; } catch {}
       this.addEventListener('change',e=>{

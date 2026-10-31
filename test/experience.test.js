@@ -9,7 +9,7 @@ const source = fs.readFileSync(path.join(__dirname,'../public/experience.js'),'u
 const flush = async () => { for(let i=0;i<12;i++) await new Promise(setImmediate); };
 function harness(transport='web',reduceMotion=false) {
   let now=1000000, sequence=0, pendingPlay, nativePlaying=false, helperUp=true;
-  let nativeTrack={title:'Native test song',artist:'Artist',album:'Album one',artwork:'',trackKey:'a'.repeat(64)},likeSupported=true;
+  let nativeTrack={title:'Native test song',artist:'Artist',album:'Album one',artwork:'',trackKey:'a'.repeat(64)},likeSupported=true,artworkResult={url:null},artworkWait=null;
   const callbacks=new Map(), intervals=new Map(), requests=[], listeners={}, data=new Map();
   const state={workspaceId:'account-a',user:'Tester',settings:{experience:{musicMode:'full',musicSource:transport}}};
   if(transport==='desktop') data.set('cadence.desktop.pair',JSON.stringify({owner:'account-a',key:'q'.repeat(32),clientId:'a'.repeat(32)}));
@@ -17,6 +17,7 @@ function harness(transport='web',reduceMotion=false) {
   class Element {
     constructor(){this.dataset={};this.style={};this.children=[];this.nodes={};}
     setAttribute(){}
+    removeAttribute(name){delete this[name];}
     append(...els){this.children.push(...els);}
     querySelector(key){
       if(key==='[data-action=play]') return this.querySelector('.music-controls').children.find(b=>b.dataset.action==='play');
@@ -33,6 +34,7 @@ function harness(transport='web',reduceMotion=false) {
     fetch:async(url,opts={})=>{
       const body=opts.body?JSON.parse(opts.body):null;
       requests.push({url,method:opts.method||'GET',body});
+      if(url==='/api/artwork'){const result=artworkResult;if(artworkWait)await artworkWait;return {ok:true,json:async()=>result};}
       if(url.startsWith('http://127.0.0.1:17842')) {
         if(url.endsWith('/health')){if(!helperUp)throw Error('Failed to fetch');return {ok:true,json:async()=>({ok:true,service:'cadence-desktop'})};}
         if(url.endsWith('/timer')) nativePlaying=body.allowed && body.deadline>now;
@@ -52,6 +54,8 @@ function harness(transport='web',reduceMotion=false) {
     setNow(v){now=v;},now:()=>now,
     setNativePlaying(v){nativePlaying=v;},
     setNativeTrack(v){nativeTrack={...nativeTrack,...v};},
+    setArtworkResult(v){artworkResult=v;},
+    holdArtwork(){let release;artworkWait=new Promise(r=>release=r);return ()=>{artworkWait=null;release();};},
     setLikeSupported(v){likeSupported=v;},
     runIntervals(){[...intervals.values()].forEach(fn=>fn());},
     setHelperUp(v){helperUp=v;},
@@ -112,13 +116,39 @@ function harness(transport='web',reduceMotion=false) {
   assert.equal([...metadata.intervals.keys()].join(','),pollIds,'routine store emissions do not restart and starve metadata polling');
   metadata.setNativeTrack({title:'Next song',artist:'Next artist',album:'Album two',artwork:'data:image/png;base64,AA==',trackKey:'b'.repeat(64)});metadata.setNow(metadata.now()+2000);metadata.runIntervals();await flush();
   const metadataPlayer=metadata.body.children[0];assert.equal(metadataPlayer.querySelector('.music-title').textContent,'Next song');assert.equal(metadataPlayer.querySelector('.music-artist').textContent,'Next artist');assert.equal(metadataPlayer.querySelector('img').src,'data:image/png;base64,AA==','art follows the new track');
+  const cover=metadataPlayer.querySelector('img'),placeholder=metadataPlayer.querySelector('.music-placeholder');
+  assert.equal(cover.hidden,true,'cover waits for successful image loading');assert.equal(placeholder.hidden,false,'loading keeps a visible placeholder');
+  cover.onload();assert.equal(cover.hidden,false);assert.equal(placeholder.hidden,true,'loaded artwork replaces the placeholder');
+  cover.onerror();assert.equal(cover.hidden,true);assert.equal(placeholder.hidden,false,'failed artwork never leaves an empty or broken square');
+  const staleLoad=cover.onload;
   metadata.setNativeTrack({title:'Third song',artist:'Third artist',artwork:'data:image/png;base64,AQ==',trackKey:'c'.repeat(64)});metadata.setNow(metadata.now()+2000);metadata.runIntervals();await flush();assert.equal(metadataPlayer.querySelector('.music-title').textContent,'Third song','automatic changes keep refreshing beyond the first transition');
+  staleLoad();assert.equal(cover.hidden,true,'late image callbacks cannot reveal the previous song cover');
+  cover.onload();assert.equal(cover.hidden,false,'new cover can load independently');
+  metadata.setNativeTrack({artwork:'javascript:bad'});metadata.setNow(metadata.now()+2000);metadata.runIntervals();await flush();
+  assert.equal(cover.hidden,true);assert.equal(placeholder.hidden,false);assert.equal(cover.src,undefined,'invalid artwork is removed rather than revealing stale art');
   const likeButton=metadataPlayer.querySelector('.music-controls').children.find(b=>b.dataset.action==='like'),beforeLike=metadata.requests.length;
   assert.equal(likeButton.disabled,false);likeButton.onclick();likeButton.onclick();await flush();
   const likes=metadata.requests.slice(beforeLike).filter(r=>r.url.endsWith('/like'));assert.equal(likes.length,1,'like click is debounced');assert.equal(likes[0].body.trackKey,'c'.repeat(64),'like targets the currently displayed song');
   assert(metadata.requests.slice(beforeLike).every(r=>!r.url.endsWith('/command')&&!r.url.endsWith('/timer')),'liking does not play, pause, skip or change focus ownership');
   metadata.setLikeSupported(false);metadata.setNow(metadata.now()+2000);metadata.runIntervals();await flush();assert.equal(likeButton.disabled,true,'older helpers do not advertise unsupported like controls');
   metadata.timer({signedIn:false,running:false});await flush();assert.equal(metadata.intervals.size,0,'sign-out stops polling');
+
+  const covers=harness('desktop');await flush();
+  covers.setArtworkResult({url:'https://coverartarchive.org/release-group/test/front-250',source:'Cover Art Archive',sourceUrl:'https://musicbrainz.org/release-group/12345678-1234-1234-1234-123456789abc'});
+  covers.timer({running:false});await flush();
+  const fallbackImage=covers.body.children[0].querySelector('img');
+  assert.equal(fallbackImage.src,'https://coverartarchive.org/release-group/test/front-250','missing native art resolves through the approved catalog');
+  const lookup=covers.requests.filter(r=>r.url==='/api/artwork');assert.equal(lookup.length,1);
+  assert.deepEqual(lookup[0].body,{album:'Album one',artist:'Artist'},'only album and artist are sent');
+  covers.setNow(covers.now()+2000);covers.runIntervals();await flush();assert.equal(covers.requests.filter(r=>r.url==='/api/artwork').length,1,'metadata polling reuses the album cache');
+  covers.store.saveSettings({experience:{musicSource:'desktop',musicMode:'artwork',artworkLookup:false}});await flush();
+  assert.equal(fallbackImage.hidden,true,'opting out removes catalog art');
+  const stale=harness('desktop');await flush();const releaseArtwork=stale.holdArtwork();
+  stale.setArtworkResult({url:'https://coverartarchive.org/release-group/old/front-250'});stale.timer({running:false});await flush();
+  stale.setNativeTrack({album:'New album',artwork:'data:image/png;base64,AQ==',trackKey:'d'.repeat(64)});stale.setNow(stale.now()+2000);stale.runIntervals();await flush();releaseArtwork();await flush();
+  assert.equal(stale.body.children[0].querySelector('img').src,'data:image/png;base64,AQ==','a late lookup cannot replace the next album artwork');
+  const optedOut=harness('desktop');await flush();optedOut.store.saveSettings({experience:{musicSource:'desktop',musicMode:'full',artworkLookup:false}});optedOut.timer({running:false});await flush();
+  assert.equal(optedOut.requests.some(r=>r.url==='/api/artwork'),false,'disabled lookup sends no catalog request');
 
   const race=harness();await flush();const release=await race.holdPlay();race.timer();await flush();race.timer({mode:'short'});await flush();assert(race.requests.at(-1).url.endsWith('/pause'),'break pause does not wait for an in-flight resume');release();await flush();
   assert(race.requests.at(-1).url.endsWith('/pause'),'late resume response cannot leave a break playing');
