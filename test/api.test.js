@@ -233,7 +233,7 @@ test('analytics are computed server-side from the log', async () => {
   assert.strictEqual(a.sessionsToday.count, 2);
   assert.strictEqual(a.streak.days, 2);
   assert.strictEqual(a.categories[0].name, 'DEEP WORK');
-  assert.strictEqual(a.week.totalText, '4.3H TOTAL');
+  assert.strictEqual(a.week.totalText, '4H 20M TOTAL');
 });
 
 test('analytics reject a missing or malformed date', async () => {
@@ -320,6 +320,44 @@ test('the app serves the pomodoro page at the root', async () => {
   assert.strictEqual(r.status, 200);
   assert.ok(html.includes('<x-dc>'), 'design component root present');
   assert.ok(html.includes('sync.js'), 'sync layer linked');
+});
+
+test('shared timer syncs progress, rejects stale transitions and records partial focus once', async () => {
+  const ws = (await j('/api/workspaces', { method: 'POST', body: '{}' })).body.id;
+  const endpoint = '/api/workspaces/' + ws + '/timer';
+  assert.strictEqual((await j(endpoint)).body.timer, null);
+  const now = Date.now();
+  const timer = { id: uuid(), changeId: uuid(), mode: 'focus', round: 3, planned: 1500,
+    remaining: 900, running: true, deadline: now + 900000, startedAt: now - 600000,
+    localDate: TODAY, category: 'DESIGN' };
+  const put = (t, baseChangeId, session) => j(endpoint, { method: 'PUT', body: JSON.stringify({ timer: t, baseChangeId, session }) });
+  assert.strictEqual((await put(timer, null)).status, 200);
+  const otherDevice = (await j(endpoint)).body;
+  assert.strictEqual(otherDevice.timer.round, 3);
+  assert.strictEqual(otherDevice.timer.deadline, timer.deadline);
+  const live = (await j('/api/workspaces/' + ws + '/analytics?today=' + TODAY)).body;
+  assert.strictEqual(live.focusToday.text, '10m');
+  const paused = { ...timer, changeId: uuid(), running: false, deadline: 0 };
+  assert.strictEqual((await put(paused, timer.changeId)).status, 200);
+  assert.strictEqual((await put({ ...timer, changeId: uuid(), round: 1 }, timer.changeId)).status, 409);
+  const next = { ...paused, id: uuid(), changeId: uuid(), mode: 'short', planned: 300, remaining: 300 };
+  const partial = { id: timer.id, mode: 'focus', seconds: 600, planned: 1500, completed: false,
+    startedAt: timer.startedAt, endedAt: now, localDate: TODAY, category: 'DESIGN' };
+  const competing = await Promise.all([
+    put(next, paused.changeId, partial),
+    put({ ...next, id: uuid(), changeId: uuid() }, paused.changeId, partial)
+  ]);
+  assert.deepStrictEqual(competing.map(r => r.status).sort(), [200, 409]);
+  const winner = competing.find(r => r.status === 200).body.timer;
+  assert.strictEqual((await put(winner, paused.changeId, partial)).status, 200, 'lost-response retry is idempotent');
+  const state = (await j('/api/workspaces/' + ws + '/state')).body;
+  assert.strictEqual(state.sessions.length, 1);
+  assert.strictEqual(state.sessions[0].seconds, 600);
+  const saved = (await j('/api/workspaces/' + ws + '/analytics?today=' + TODAY)).body;
+  assert.strictEqual(saved.focusToday.text, '10m');
+  assert.strictEqual(saved.sessionsToday.count, 1);
+  assert.strictEqual((await put({ ...winner, round: 9 }, winner.changeId)).status, 400);
+  assert.strictEqual((await j('/api/workspaces/' + uuid() + '/timer')).status, 404);
 });
 
 /* ------------------------------------------------------------------ */

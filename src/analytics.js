@@ -5,25 +5,27 @@
  * Worker's authoritative computation are literally the same code path. */
 
 const { computeAnalytics } = require('../public/analytics-core.js');
+const { getTimer } = require('./timer');
 
 async function analytics(db, workspaceId, today, opts = {}) {
   const { results } = await db
     .prepare(
-      `SELECT seconds, category, local_date AS localDate, mode, completed
+      `SELECT id, seconds, category, local_date AS localDate, mode, completed
          FROM sessions
-        WHERE workspace_id = ? AND mode = 'focus' AND completed = 1`
+        WHERE workspace_id = ? AND mode = 'focus'`
     )
     .bind(workspaceId)
     .all();
 
   const rows = results.map((r) => ({
+    id: r.id,
     mode: r.mode,
     seconds: r.seconds,
     category: r.category,
     localDate: r.localDate,
     completed: !!r.completed,
   }));
-  return computeAnalytics(rows, today, opts);
+  return computeAnalytics(rows, today, { ...opts, timer: await getTimer(db, workspaceId) });
 }
 
 module.exports = { analytics };

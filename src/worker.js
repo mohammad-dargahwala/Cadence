@@ -12,6 +12,7 @@ const store = require('./db');
 const { analytics } = require('./analytics');
 const auth = require('./auth');
 const { handleArtwork } = require('./artwork');
+const timerStore = require('./timer');
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -19,7 +20,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
   });
 }
 
@@ -142,11 +143,26 @@ async function handleAnalytics(env, workspaceId, url) {
   return json(await analytics(env.DB, workspaceId, today, { goal: url.searchParams.get('goal') }));
 }
 
+async function handleTimer(request, env, workspaceId) {
+  if (request.method === 'GET') return json({ timer: await timerStore.getTimer(env.DB, workspaceId), serverTime: Date.now() });
+  const body = await readJson(request);
+  const timer = timerStore.cleanTimer(body.timer);
+  if (!timer || (body.baseChangeId !== null && !UUID_RE.test(body.baseChangeId || ''))) return json({ error: 'bad_timer' }, 400);
+  const session = body.session || null;
+  if (session && (!UUID_RE.test(session.id || '') || !['focus','short','long'].includes(session.mode) ||
+      !Number.isFinite(session.seconds) || session.seconds < 0 || session.seconds > 10800 ||
+      !Number.isFinite(session.planned) || session.planned < session.seconds || session.planned > 10800 ||
+      !Number.isFinite(session.startedAt) || !Number.isFinite(session.endedAt) ||
+      !DATE_RE.test(session.localDate || '') || session.id === timer.id)) return json({ error: 'bad_session' }, 400);
+  const result = await timerStore.putTimer(env.DB, workspaceId, timer, body.baseChangeId, session);
+  return json({ ...result, serverTime: Date.now() }, result.accepted ? 200 : 409);
+}
+
 /* ---------------------------------------------------------------- *
  * router
  * ---------------------------------------------------------------- */
 
-const WORKSPACE_ROUTE = /^\/api\/workspaces\/([^/]+)\/(state|sessions|tasks|settings|analytics)$/;
+const WORKSPACE_ROUTE = /^\/api\/workspaces\/([^/]+)\/(state|sessions|tasks|settings|analytics|timer)$/;
 
 export default {
   async fetch(request, env) {
@@ -185,6 +201,7 @@ export default {
         if (resource === 'tasks' && method === 'PUT') return handleTasks(request, env, workspaceId);
         if (resource === 'settings' && method === 'PUT') return handleSettings(request, env, workspaceId);
         if (resource === 'analytics' && method === 'GET') return handleAnalytics(env, workspaceId, url);
+        if (resource === 'timer' && (method === 'GET' || method === 'PUT')) return handleTimer(request, env, workspaceId);
       }
 
       if (pathname.startsWith('/api/')) return json({ error: 'not_found' }, 404);

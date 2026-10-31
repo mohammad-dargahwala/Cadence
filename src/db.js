@@ -22,7 +22,9 @@ async function createWorkspace(db) {
 async function ensureWorkspace(db, id) {
   const row = await db.prepare('SELECT * FROM workspaces WHERE id = ?').bind(id).first();
   if (!row) return null;
-  await db.prepare('UPDATE workspaces SET seen_at = ? WHERE id = ?').bind(Date.now(), id).run();
+  if (Date.now() - row.seen_at >= 60000) {
+    await db.prepare('UPDATE workspaces SET seen_at = ? WHERE id = ?').bind(Date.now(), id).run();
+  }
   return row;
 }
 

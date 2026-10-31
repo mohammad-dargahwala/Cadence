@@ -11,6 +11,7 @@
 <script src="./support.js"></script>
 <script src="./analytics-core.js"></script>
 <script src="./sync.js"></script>
+<script src="./timer-sync.js"></script>
 <link rel="stylesheet" href="./experience.css">
 <script src="./flow-engine.js" defer></script>
 <script src="./extra-worlds.js" defer></script>
@@ -495,7 +496,7 @@ class Component extends DCLogic {
     if(this.state.alarmSounding && (!this.state.sound || this.state.volume<=0 || this.state.alarmSound==='none')){this.silenceAlarm();return;}
     window.CadenceTimerSnapshot = {
       mode: this.state.mode, running: this.state.running, signedIn: !!this.state.user,
-      alarm: this.state.alarmSounding, remaining: this.state.remaining, deadline: this.deadline || 0,
+      alarm: this.state.alarmSounding, remaining: this.state.remaining, deadline: this.deadline ? this.deadline - (this.timerSync?.offset || 0) : 0,
       view: this.state.view
     };
     if (window.CadenceExperience) window.CadenceExperience.timer(window.CadenceTimerSnapshot);
@@ -511,6 +512,7 @@ class Component extends DCLogic {
     document.removeEventListener('click', this.onAnyClick, true);
     document.removeEventListener('visibilitychange', this.onVisibility);
     if (this.unsubscribe) this.unsubscribe();
+    if (this.timerSync) this.timerSync.close();
   }
 
   /* ---------- store bridge ---------- */
@@ -521,10 +523,14 @@ class Component extends DCLogic {
     const nextWorkspace = st.workspaceId || null;
     const identityChanged = this.timerWorkspace !== nextWorkspace;
     if (identityChanged) {
+      if (this.timerSync) this.timerSync.close();
+      this.timerSync = null;
+      this.appliedTimerChange = null;
       clearInterval(this.timer);
       this.deadline = 0;
       this.intervalId = null;
       this.intervalSeconds = 0;
+      this.intervalLocalDate = null;
       this.timerWorkspace = nextWorkspace;
       this.TIMER_KEY = 'cadence.timer.' + (nextWorkspace || 'signed-out');
     }
@@ -563,7 +569,12 @@ class Component extends DCLogic {
       this.applyTheme(selectedTheme);
     }
     if (identityChanged) Object.assign(patch, { running: false, mode: 'focus', round: 1, remaining: (cfg.durations || this.state.durations).focus * 60 });
-    this.setState(patch, () => { if (identityChanged && st.user) this.restoreTimer(); });
+    this.setState(patch, () => {
+      if (identityChanged && st.user) {
+        const controller = this.timerSync = new window.CadenceTimerSync(this.store, this.applySharedTimer);
+        controller.ready.then(() => { if (this.timerSync === controller && !controller.timer) this.restoreTimer(); });
+      }
+    });
   };
 
   persistSettings() {
@@ -581,24 +592,64 @@ class Component extends DCLogic {
   /* The running interval is pinned to a wall-clock deadline rather than a
    * count of ticks, so a throttled background tab, a sleeping laptop or a
    * full page reload all resume at the correct remaining time. */
-  saveTimer() {
+  timerNow() { return this.timerSync ? this.timerSync.now() : Date.now(); }
+
+  applySharedTimer = (saved) => {
+    if (!saved || saved.changeId === this.appliedTimerChange) return;
+    this.appliedTimerChange = saved.changeId;
+    this.stopAlarm();
+    clearInterval(this.timer);
+    this.intervalId = saved.id;
+    this.intervalSeconds = saved.planned;
+    this.intervalStartedAt = saved.startedAt;
+    this.intervalLocalDate = saved.localDate;
+    this.deadline = saved.running ? saved.deadline : 0;
+    const remaining = saved.running ? Math.max(0, Math.ceil((saved.deadline - this.timerNow()) / 1000)) : saved.remaining;
+    this.setState({ mode: saved.mode, round: saved.round, running: saved.running, remaining }, () => {
+      if (saved.running) {
+        this.timer = setInterval(this.tick, 500);
+        if (!remaining) this.complete();
+      }
+    });
+  };
+
+  saveTimer(session) {
     if (!this.state.user) return;
+    const s = this.state, task = this.activeTask();
+    const previous = this.timerSync?.timer;
+    const sameInterval = previous && previous.id === this.intervalId;
+    const snapshot = {
+      id: this.intervalId || (this.intervalId = crypto.randomUUID()),
+      mode: s.mode, round: s.round, running: s.running,
+      remaining: s.remaining, deadline: this.deadline || 0,
+      planned: this.total(), startedAt: this.intervalStartedAt || this.timerNow(),
+      localDate: this.intervalLocalDate || (this.intervalLocalDate = this.localDate()),
+      taskId: sameInterval ? previous.taskId : task ? task.id : null,
+      category: sameInterval ? previous.category : task ? task.category : 'UNSORTED'
+    };
+    if (this.timerSync) {
+      this.timerSync.save(snapshot, session);
+      this.appliedTimerChange = this.timerSync.timer.changeId;
+    }
     try {
-      const s = this.state;
-      localStorage.setItem(this.TIMER_KEY, JSON.stringify({
-        id: this.intervalId || (this.intervalId = crypto.randomUUID()),
-        mode: s.mode, round: s.round, running: s.running,
-        remaining: s.remaining, deadline: this.deadline || 0,
-        planned: this.total(), startedAt: this.intervalStartedAt || 0, savedAt: Date.now()
-      }));
+      localStorage.setItem(this.TIMER_KEY, JSON.stringify(snapshot));
     } catch (e) {}
   }
+
+  localDate() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
 
   restoreTimer() {
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem(this.TIMER_KEY) || 'null'); } catch (e) {}
     this.intervalId = saved && saved.id || crypto.randomUUID();
-    if (!saved || !saved.mode) { this.intervalStartedAt = Date.now(); return; }
+    if (!saved || !saved.mode) { this.intervalStartedAt = this.timerNow(); return; }
+
+    // Migrate a browser's old timer only after the shared timer was checked.
+    if (this.timerSync) {
+      this.timerSync.save({ ...saved, localDate: saved.localDate || this.localDate(), startedAt: saved.startedAt || this.timerNow() });
+      this.applySharedTimer(this.timerSync.timer);
+      return;
+    }
 
     const mode = ['focus','short','long'].includes(saved.mode) ? saved.mode : 'focus';
     this.intervalSeconds = Number.isFinite(saved.planned) && saved.planned >= 60 && saved.planned <= 3600 ? saved.planned : this.state.durations[mode] * 60;
@@ -829,10 +880,9 @@ class Component extends DCLogic {
   /* ---------- timer ---------- */
   tick = () => {
     if (!this.deadline) return;
-    const left = Math.max(0, Math.ceil((this.deadline - Date.now()) / 1000));
+    const left = Math.max(0, Math.ceil((this.deadline - this.timerNow()) / 1000));
     if (left === this.state.remaining) return;
     this.setState({ remaining: left }, () => {
-      this.saveTimer();
       if (this.state.remaining === 0) this.complete();
     });
   };
@@ -842,11 +892,11 @@ class Component extends DCLogic {
     let remaining = this.state.remaining;
     if (run) {
       if (!this.intervalSeconds) this.intervalSeconds = this.state.durations[this.state.mode] * 60;
-      this.deadline = Date.now() + this.state.remaining * 1000;
-      if (!this.intervalStartedAt) this.intervalStartedAt = Date.now();
+      this.deadline = this.timerNow() + this.state.remaining * 1000;
+      if (!this.intervalStartedAt) this.intervalStartedAt = this.timerNow();
       this.timer = setInterval(this.tick, 500);
     } else {
-      if (this.deadline) remaining = Math.max(0, Math.ceil((this.deadline - Date.now()) / 1000));
+      if (this.deadline) remaining = Math.max(0, Math.ceil((this.deadline - this.timerNow()) / 1000));
       this.deadline = 0;
     }
     this.setState({ running: run, remaining }, () => this.saveTimer());
@@ -856,18 +906,19 @@ class Component extends DCLogic {
     this.stopAlarm();
     const next = !this.state.running;
     this.pop(next ? 440 : 300, .1, 'sine', .06);
-    if (next && this.state.remaining === this.total()) this.intervalStartedAt = Date.now();
+    if (next && this.state.remaining === this.total()) { this.intervalStartedAt = this.timerNow(); this.intervalLocalDate = this.localDate(); }
     this.setRunning(next);
     this.toast(next ? 'Session started' : 'Paused', next ? this.modeName(this.state.mode) + ' · ' + this.state.durations[this.state.mode] + ' min' : 'Pick it back up any time');
   };
 
   reset = () => {
     this.stopAlarm();
-    this.setRunning(false);
-    this.intervalStartedAt = Date.now();
+    const session = this.logInterval(this.elapsed());
+    clearInterval(this.timer); this.deadline = 0;
+    this.intervalStartedAt = this.timerNow(); this.intervalLocalDate = this.localDate();
     this.intervalId = crypto.randomUUID();
     this.intervalSeconds = this.state.durations[this.state.mode] * 60;
-    this.setState({ remaining: this.total() }, () => this.saveTimer());
+    this.setState({ remaining: this.total(), running: false }, () => this.saveTimer(session));
     this.pop(240, .12, 'square', .04);
     this.toast('Timer reset', this.modeName(this.state.mode));
   };
@@ -879,11 +930,12 @@ class Component extends DCLogic {
    * session is being abandoned rather than just paused. */
   resetAll = () => {
     this.stopAlarm();
-    this.setRunning(false);
-    this.intervalStartedAt = Date.now();
+    const session = this.logInterval(this.elapsed());
+    clearInterval(this.timer); this.deadline = 0;
+    this.intervalStartedAt = this.timerNow(); this.intervalLocalDate = this.localDate();
     this.intervalId = crypto.randomUUID();
     this.intervalSeconds = this.state.durations.focus * 60;
-    this.setState({ mode: 'focus', round: 1, remaining: this.state.durations.focus * 60 }, () => this.saveTimer());
+    this.setState({ mode: 'focus', round: 1, remaining: this.state.durations.focus * 60, running: false }, () => this.saveTimer(session));
     this.pop(200, .14, 'square', .05);
     this.toast('Timer reset', 'Back to round 1 · Focus');
   };
@@ -901,26 +953,33 @@ class Component extends DCLogic {
     if (!this.store || !this.state.user) return;
     const s = this.state;
     const task = this.activeTask();
+    const current = this.timerSync?.timer;
+    const savedTarget = current && current.id === this.intervalId;
     const startedAt = this.intervalStartedAt || (Date.now() - elapsedSec * 1000);
-    this.store.logSession({
+    if (elapsedSec <= 0) return null;
+    return {
       id: this.intervalId || (this.intervalId = crypto.randomUUID()),
       mode: s.mode,
       seconds: elapsedSec,
       planned: this.total(),
-      completed: elapsedSec >= 60,
-      taskId: task ? task.id : null,
-      category: task ? task.category : 'UNSORTED',
+      completed: elapsedSec >= this.total(),
+      taskId: savedTarget ? current.taskId : task ? task.id : null,
+      category: savedTarget ? current.category : task ? task.category : 'UNSORTED',
       startedAt,
-      endedAt: Date.now()
-    });
+      endedAt: this.timerNow(),
+      localDate: this.intervalLocalDate || this.localDate()
+    };
+  }
+
+  elapsed() {
+    const left = this.state.running && this.deadline ? Math.max(0, Math.ceil((this.deadline - this.timerNow()) / 1000)) : this.state.remaining;
+    return Math.max(0, Math.min(this.total(), this.total() - left));
   }
 
   complete(skipped) {
     const s = this.state;
     const musicWasPlaying = !!(window.CadenceExperience && window.CadenceExperience.musicWasPlaying());
-    const left = s.running && this.deadline ? Math.max(0, Math.ceil((this.deadline - Date.now()) / 1000)) : s.remaining;
-    const elapsed = Math.max(0, this.total() - left);
-    this.logInterval(elapsed);
+    const session = this.logInterval(this.elapsed());
 
     this.intervalId = crypto.randomUUID();
     let mode, round = s.round;
@@ -929,9 +988,9 @@ class Component extends DCLogic {
     this.intervalSeconds = s.durations[mode] * 60;
     clearInterval(this.timer);
     const run = s.autoStart && !skipped;
-    this.intervalStartedAt = Date.now();
-    this.deadline = run ? Date.now() + s.durations[mode] * 60 * 1000 : 0;
-    this.setState({ mode, round, remaining: s.durations[mode] * 60, running: run }, () => this.saveTimer());
+    this.intervalStartedAt = this.timerNow(); this.intervalLocalDate = this.localDate();
+    this.deadline = run ? this.timerNow() + s.durations[mode] * 60 * 1000 : 0;
+    this.setState({ mode, round, remaining: s.durations[mode] * 60, running: run }, () => this.saveTimer(session));
     if (run) this.timer = setInterval(this.tick, 500);
     const headline = s.mode === 'focus' ? 'Focus block done' : 'Break over';
     const detail = 'Now: ' + this.modeName(mode) + ' · ' + s.durations[mode] + ' min';
@@ -947,12 +1006,13 @@ class Component extends DCLogic {
   setMode = (m) => () => {
     if (m === this.state.mode) return;
     this.stopAlarm();
+    const session = this.logInterval(this.elapsed());
     clearInterval(this.timer);
     this.deadline = 0;
-    this.intervalStartedAt = Date.now();
+    this.intervalStartedAt = this.timerNow(); this.intervalLocalDate = this.localDate();
     this.intervalId = crypto.randomUUID();
     this.intervalSeconds = this.state.durations[m] * 60;
-    this.setState({ mode: m, remaining: this.state.durations[m] * 60, running: false }, () => this.saveTimer());
+    this.setState({ mode: m, remaining: this.state.durations[m] * 60, running: false }, () => this.saveTimer(session));
     this.pop(520, .07, 'sine', .045);
     this.toast(this.modeName(m), this.state.durations[m] + ' minute interval');
   };
@@ -1132,7 +1192,7 @@ class Component extends DCLogic {
     const counts = {};
     if (st && st.sessions) {
       for (const s of st.sessions) {
-        if (s.mode !== 'focus' || s.completed === false || !s.taskId) continue;
+        if (s.mode !== 'focus' || !s.seconds || !s.taskId) continue;
         counts[s.taskId] = (counts[s.taskId] || 0) + 1;
       }
     }
@@ -1227,7 +1287,7 @@ class Component extends DCLogic {
         bg: b.isToday ? th.accent : th.pill,
         lc: b.isToday ? th.fg : th.fg3
       })) : [],
-      weekTotal: a ? a.week.totalText : '0.0H TOTAL',
+      weekTotal: a ? a.week.totalText : '0M TOTAL',
       legend: cats.map((c, i) => ({ name: this.titleCase(c.name), pct: c.pct + '%', c: palette[i] })),
       donut: stops.length ? 'conic-gradient(' + stops.join(',') + ')' : 'conic-gradient(' + th.cardB + ' 0 100%)',
       topCatPct: cats.length ? cats[0].pct + '%' : '0%',

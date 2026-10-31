@@ -33,18 +33,16 @@
   }
 
   function hm(secs) {
-    var m = Math.round(secs / 60);
-    if (m < 60) return m + 'm';
-    var h = Math.floor(m / 60);
-    var rem = m % 60;
-    return rem ? h + 'h ' + rem + 'm' : h + 'h';
+    var total = Math.max(0, Math.round(secs || 0));
+    var h = Math.floor(total / 3600), m = Math.floor(total % 3600 / 60), s = total % 60;
+    return [h ? h + 'h' : '', m ? m + 'm' : '', s ? s + 's' : ''].filter(Boolean).join(' ') || '0m';
   }
 
   /** U+2212 MINUS SIGN for negatives, matching the mockup's '−1m vs last week'. */
   function signedMinutes(deltaSecs) {
-    var m = Math.round(deltaSecs / 60);
-    if (m === 0) return '0m';
-    return (m > 0 ? '+' : '\u2212') + Math.abs(m) + 'm';
+    var seconds = Math.round(deltaSecs);
+    if (seconds === 0) return '0m';
+    return (seconds > 0 ? '+' : '\u2212') + hm(Math.abs(seconds));
   }
 
   function computeStreak(byDate, today) {
@@ -87,10 +85,20 @@
   function computeAnalytics(sessions, today, opts) {
     opts = opts || {};
     var goal = Number(opts.goal) || 10;
-    var list = Array.isArray(sessions) ? sessions : [];
+    var list = Array.isArray(sessions) ? sessions.slice() : [];
+    var timer = opts.timer;
+    if (timer && timer.mode === 'focus' && !list.some(function (s) { return s.id && s.id === timer.id; })) {
+      var now = opts.now == null ? Date.now() : opts.now;
+      var left = timer.running ? Math.max(0, Math.ceil((timer.deadline - now) / 1000)) : timer.remaining;
+      // Only completed minutes appear in the live total. Pauses do not add time,
+      // and a closed browser can accrue at most the planned focus interval.
+      var elapsed = Math.floor(Math.max(0, Math.min(timer.planned, timer.planned - left)) / 60) * 60;
+      if (elapsed > 0) list.push({ id: timer.id, mode: 'focus', seconds: elapsed,
+        category: timer.category, localDate: timer.localDate || today, completed: false });
+    }
 
     var focus = list.filter(function (s) {
-      return s && s.mode === 'focus' && s.completed !== false && s.localDate;
+      return s && s.mode === 'focus' && Number(s.seconds) > 0 && s.localDate;
     });
 
     var byDate = {};
@@ -145,7 +153,7 @@
         date: k,
         label: WEEKDAYS[idx],
         hours: hours,
-        val: hours.toFixed(1),
+        val: hm(at(k).secs),
         heightPx: Math.round((hours / ceiling) * 150) + 12,
         isToday: idx === todayIdx,
       };
@@ -218,7 +226,7 @@
       week: {
         bars: bars,
         totalSeconds: weekTotalSecs,
-        totalText: (weekTotalSecs / 3600).toFixed(1) + 'H TOTAL',
+        totalText: hm(weekTotalSecs).toUpperCase() + ' TOTAL',
         ceiling: ceiling,
       },
       categories: categories,

@@ -166,18 +166,27 @@ function harness(transport='web',reduceMotion=false) {
   class Logic{constructor(){this.props={};}setState(patch,fn){Object.assign(this.state,typeof patch==='function'?patch(this.state):patch);if(fn)fn();}}
   const worldEnv={window:{}};vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../public/art-worlds.js'),'utf8'),worldEnv);
   vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../public/alarm-audio.js'),'utf8'),worldEnv);
+  worldEnv.window.CadenceTimerSync=class {
+    constructor(store){this.store=store;this.ready=Promise.resolve();}
+    now(){return clock;}
+    save(snapshot,session){this.timer={...snapshot,changeId:crypto.randomUUID()};if(session)this.store.logSession(session);}
+    close(){this.closed=true;}
+  };
   const Component=vm.runInNewContext(code+'; Component',{DCLogic:Logic,crypto:crypto.webcrypto,console,
     Date:class extends Date{static now(){return clock;}},localStorage:{getItem:k=>saved.get(k),setItem:(k,v)=>saved.set(k,v)},
     document:{documentElement:{style:{setProperty(){}},dataset:{}},body:{style:{}},querySelector:()=>null},window:worldEnv.window,
     setInterval:()=>++index,clearInterval(){},setTimeout:(fn)=>{timers.set(++index,fn);return index;},clearTimeout:id=>timers.delete(id)});
   const c=new Component();c.pop=()=>{};c.toast=()=>{};c.startAlarm=()=>{};
   c.store={logSession:e=>logged.push(e),getState:()=>({sessions:[]}),saveSettings(){}};c.state.user='Tester';c.TIMER_KEY='timer-a';
+  c.timerSync=new worldEnv.window.CadenceTimerSync(c.store);
   assert.equal(Object.keys(c.themes).length,12,'twelve worlds available');
   for(const id of ['polar','rain','dunes']){c.setTheme(id)();assert.equal(c.state.theme,id,'new theme can be selected');}
   c.setTheme('clay')();assert.equal(c.state.theme,'valley','retired selection resolves to a painted world');c.setTheme('nebula')();
   c.setRunning(true);clock+=1499700;c.tick();assert.equal(c.state.remaining,1,'timer never finishes half a second early');clock+=300;c.tick();assert.equal(c.state.mode,'short');assert.equal(logged[0].seconds,1500);
   c.setMode('long')();assert.equal(c.renderVals().runLabel,'Start break','break action uses correct label');
   c.setMode('focus')();c.setRunning(true);c.state.durations.focus=40;assert.equal(c.total(),1500,'editing preferences does not change an active interval length');c.setRunning(false);c.reset();assert.equal(c.total(),2400,'reset adopts the new interval preference');
+  c.setRunning(true);clock+=600000;c.tick();c.skip();assert.equal(logged.at(-1).seconds,600,'ten minutes then skip retains ten minutes');assert.equal(logged.at(-1).completed,false);
+  c.setMode('focus')();c.setRunning(true);clock+=300000;c.resetAll();assert.equal(logged.at(-1).seconds,300,'reset all retains partial focus');assert.equal(c.state.round,1);
   c.state.alarmActive=true;c.state.alarmSounding=true;let stopped=0;c.alarmVoices=[{stop(){stopped++}}];c.stopAlarm();assert.equal(stopped,1,'dismissal stops active voices');assert.equal(c.state.alarmSounding,false);assert.equal(timers.size,0,'alarm dismissal cancels pending notes');
   c.state.running=true;c.onStoreChange({user:'Other',workspaceId:'other',settings:{durations:{focus:30,short:5,long:15}}});assert.equal(c.state.running,false,'new account never inherits active timer');assert.equal(c.state.remaining,1800);assert.equal(c.TIMER_KEY,'cadence.timer.other');
   console.log('Experience and timer regressions passed: focus/break/pause/alarm/deadline, playback races, manual pause, display modes, sign-out, themes, countdown rounding, account isolation, and alarm cancellation.');

@@ -32,7 +32,7 @@ test('empty log yields a fully zeroed but well-formed result', () => {
   assert.strictEqual(a.sessionsToday.text, '0');
   assert.strictEqual(a.streak.days, 0);
   assert.strictEqual(a.week.bars.length, 7);
-  assert.strictEqual(a.week.totalText, '0.0H TOTAL');
+  assert.strictEqual(a.week.totalText, '0M TOTAL');
   assert.deepStrictEqual(a.categories, []);
 });
 
@@ -52,10 +52,10 @@ test('yesterday delta uses a real minus sign when negative', () => {
   assert.strictEqual(up.focusToday.deltaText, '+42m vs yesterday');
 });
 
-test('incomplete sessions are excluded from every total', () => {
+test('partial focus sessions count their elapsed time', () => {
   const a = computeAnalytics([mk(TODAY, 25), mk(TODAY, 25, 'DESIGN', false)], TODAY);
-  assert.strictEqual(a.sessionsToday.count, 1);
-  assert.strictEqual(a.focusToday.text, '25m');
+  assert.strictEqual(a.sessionsToday.count, 2);
+  assert.strictEqual(a.focusToday.text, '50m');
 });
 
 test('week bars are Monday-anchored and flag today', () => {
@@ -66,7 +66,7 @@ test('week bars are Monday-anchored and flag today', () => {
     ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
   );
   assert.strictEqual(a.week.bars[1].isToday, true);
-  assert.strictEqual(a.week.bars[1].val, '1.0');
+  assert.strictEqual(a.week.bars[1].val, '1h');
   assert.strictEqual(a.week.bars.filter((b) => b.isToday).length, 1);
 });
 
@@ -119,6 +119,29 @@ test('average session compares against the previous week', () => {
 test('sessions from other timezones are bucketed by their own local date', () => {
   const a = computeAnalytics([mk(TODAY, 30), mk(shift(TODAY, 1), 30)], TODAY);
   assert.strictEqual(a.focusToday.text, '30m', 'tomorrow-in-Tokyo must not land in today');
+});
+
+test('live focus grows by complete minutes and caps at the deadline while closed', () => {
+  const timer = { id: 'active', mode: 'focus', planned: 1500, remaining: 1500,
+    running: true, deadline: 2500000, localDate: TODAY, category: 'DESIGN' };
+  const at = now => computeAnalytics([], TODAY, { timer, now });
+  assert.strictEqual(at(1000000).focusToday.seconds, 0);
+  assert.strictEqual(at(1599999).focusToday.seconds, 540);
+  assert.strictEqual(at(1600000).focusToday.text, '10m');
+  assert.strictEqual(at(1660000).focusToday.text, '11m');
+  assert.strictEqual(at(99999999).focusToday.text, '25m');
+  const paused = { ...timer, running: false, remaining: 900 };
+  assert.strictEqual(computeAnalytics([], TODAY, { timer: paused, now: 99999999 }).focusToday.text, '10m');
+  const finished = { id: 'active', mode: 'focus', seconds: 600, completed: false, localDate: TODAY };
+  assert.strictEqual(computeAnalytics([finished], TODAY, { timer, now: 1600000 }).focusToday.text, '10m', 'active and saved copies never double-count');
+  assert.strictEqual(computeAnalytics([], TODAY, { timer: { ...timer, mode: 'short' }, now: 1600000 }).focusToday.seconds, 0);
+});
+
+test('duration labels contain hours, minutes and seconds instead of decimal hours', () => {
+  const a = computeAnalytics([mk(TODAY, 90.5)], TODAY);
+  assert.strictEqual(a.focusToday.text, '1h 30m 30s');
+  assert.strictEqual(a.week.bars[1].val, '1h 30m 30s');
+  assert.strictEqual(a.week.totalText, '1H 30M 30S TOTAL');
 });
 
 console.log('\n' + passed + ' assertions passed');

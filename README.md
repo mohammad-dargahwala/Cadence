@@ -10,9 +10,9 @@ The default cycle is 25 minutes of focus, then a 5-minute break. After four focu
 
 Pin a task to show it on the timer. Tasks can be added, completed, or deleted. New accounts come with four sample tasks; they're just examples and can be removed.
 
-**Reset** restarts the current interval. **Reset all** returns to round one. **Skip** moves to the next interval and records the time already spent. Resetting does not save that interval to your history.
+**Reset** restarts the current interval. **Reset all** returns to round one. **Skip** moves to the next interval. All three preserve the focus time already spent; switching modes preserves it too.
 
-Analytics count focus intervals with at least a minute recorded, including ones ended with Skip. Breaks are saved but left out of focus totals. The Analytics tab shows daily time, session counts, streaks, weekly totals, and a category breakdown.
+Analytics include elapsed focus time from partial and active intervals, even when they have not finished. Live time refreshes at each full minute, including while viewing Analytics; paused time and breaks add no focus time. An interval left running in a closed browser counts only up to its deadline. Finalized intervals retain their exact elapsed seconds. Daily totals, averages and weekly charts use hours, minutes and seconds (for example, `1h 30m`) instead of decimal hours.
 
 ## Themes and minimalist settings
 
@@ -75,7 +75,9 @@ Both routes offer Off, Hide (controls only), Minimalist, Full, or album-cover-on
 
 Choose a name and a 4–8 digit PIN when you register. The same login on another device brings back your tasks, settings, and saved sessions.
 
-The countdown itself stays in the browser where you started it. Starting a timer on your phone won't start one on your laptop. A saved deadline lets the same browser recover the remaining time after a reload.
+The countdown, mode, running/paused state and round progress sync between instances signed into the same account. Each instance counts down from one shared deadline, with its clock adjusted against server time. Visible instances check for changes every second; hidden instances check every five seconds, subject to browser throttling. Opening or returning to a tab checks immediately. Reloads restore the shared interval. A browser's earlier local timer migrates only when no shared timer exists yet.
+
+Timer transitions and their history entries are saved together. Concurrent completions record the interval once. Pending changes survive an offline reload; if another device has advanced the timer meanwhile, its accepted progress wins when the older device reconnects.
 
 The page saves account data in localStorage before sending changes to a Cloudflare Worker and D1 database. It retries failed writes, shares updates between tabs, and checks for changes from other devices every minute. Duplicate session uploads are ignored by ID; competing task and settings edits are resolved by timestamps.
 

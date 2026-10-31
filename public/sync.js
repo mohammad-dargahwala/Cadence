@@ -112,6 +112,7 @@
     tasks: [],
     settings: JSON.parse(JSON.stringify(DEFAULT_SETTINGS)),
     analytics: null,
+    liveTimer: null,
     online: navigator.onLine !== false,
     syncedAt: 0,
     workspaceId: workspaceId,
@@ -278,6 +279,8 @@
     if (!window.CadenceAnalytics) return;
     state.analytics = window.CadenceAnalytics.computeAnalytics(state.sessions, localDate(), {
       goal: 10,
+      timer: state.liveTimer,
+      now: Date.now() + (state.timerClockOffset || 0),
     });
   }
 
@@ -374,6 +377,7 @@
     state.tasks = [];
     state.settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
     state.analytics = null;
+    state.liveTimer = null;
     state.workspaceId = id;
     state.user = name;
 
@@ -614,6 +618,7 @@
       state.tasks = [];
       state.settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
       state.analytics = null;
+      state.liveTimer = null;
       state.workspaceId = null;
       state.user = null;
       state.authError = null;
@@ -639,7 +644,7 @@
         category: evt.category || null,
         startedAt: evt.startedAt || ended - (evt.seconds || 0) * 1000,
         endedAt: ended,
-        localDate: localDate(new Date(ended)),
+        localDate: evt.localDate || localDate(new Date(ended)),
         deviceId: deviceId,
       };
       state.sessions.push(record);
@@ -703,6 +708,19 @@
       return state.analytics;
     },
 
+    setLiveTimer: function (timer, offset) {
+      var now = Date.now() + (offset || 0);
+      var left = timer && timer.running ? Math.max(0, Math.ceil((timer.deadline - now) / 1000)) : timer ? timer.remaining : 0;
+      var minute = timer ? Math.floor(Math.max(0, timer.planned - left) / 60) : 0;
+      var signature = JSON.stringify(timer) + ':' + minute + ':' + localDate();
+      state.liveTimer = timer;
+      state.timerClockOffset = offset || 0;
+      if (signature === state.liveTimerSignature) return;
+      state.liveTimerSignature = signature;
+      recomputeAnalytics();
+      emit();
+    },
+
     forceSync: function () {
       return sync();
     },
@@ -736,4 +754,9 @@
     });
 
   window.CadenceStore = store;
+  setInterval(function () {
+    if (!workspaceId) return;
+    recomputeAnalytics();
+    emit();
+  }, 60000);
 })();
