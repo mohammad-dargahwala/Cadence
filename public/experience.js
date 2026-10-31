@@ -255,9 +255,16 @@
     void (async()=>{
       let entry;
       try{
-        const r=await fetch('/api/artwork',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({album,artist}),signal:AbortSignal.timeout(24000)});
-        if(!r.ok)throw Error('Artwork lookup unavailable');
-        const result=await r.json(),url=artworkURL(result);
+        let result;
+        try{
+          if(!window.CadenceArtworkCatalog)throw Error('Catalog client unavailable');
+          result=await window.CadenceArtworkCatalog.resolveCover({album,artist},{verifyImages:false});
+        }catch{
+          const r=await fetch('/api/artwork',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({album,artist}),signal:AbortSignal.timeout(24000)});
+          if(!r.ok)throw Error('Artwork lookup unavailable');
+          result=await r.json();
+        }
+        const url=artworkURL(result);
         entry={url,source:result.source,sourceUrl:result.sourceUrl,until:Date.now()+(url?86400000:Math.max(60,Math.min(900,Number(result.retryAfter)||900))*1000)};
       }catch{entry={url:'',until:Date.now()+60000};}
       if(owner===account){

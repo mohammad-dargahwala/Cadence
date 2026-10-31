@@ -1,5 +1,6 @@
 'use strict';
 const assert=require('node:assert/strict');
+const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const {normalized,sameArtist,matchingAlbums,resolveCover,handleArtwork}=require('../src/artwork');
 const id='12345678-1234-1234-1234-123456789abc';
 const group={id,title:'Discovery','artist-credit':[{name:'Daft Punk',artist:{name:'Daft Punk'}}]};
@@ -22,6 +23,13 @@ const request=(album='Discovery',artist='Daft Punk')=>new Request('https://caden
   const art=await resolveCover({album:'Discovery',artist:'Daft Punk'},hit);
   assert.equal(art.url,'https://coverartarchive.org/release-group/'+id+'/front-250');
   assert.equal(art.sourceUrl,'https://musicbrainz.org/release-group/'+id);assert.equal(hit.calls.length,2);
+  const direct=transport([{'release-groups':[group]}]);
+  assert((await resolveCover({album:'Discovery',artist:'Daft Punk'},{...direct,verifyImages:false})).url);
+  assert.equal(direct.calls.length,1,'browser image loading does not depend on a second cover-metadata request');
+  const browser={window:{},TextDecoder,Uint8Array,URLSearchParams,AbortSignal};
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../public/artwork-catalog.js'),'utf8'),browser);
+  const browserArt=await browser.CadenceArtworkCatalog.resolveCover({album:'Discovery',artist:'Daft Punk'},{verifyImages:false,fetcher:async(url,options)=>{assert.equal(options.headers['User-Agent'],undefined,'browser lookup uses normal browser headers');return json({'release-groups':[group]});}});
+  assert.equal(browserArt.url,art.url,'browser and server share the same matching rules');
   const unrelated=transport([{'release-groups':[{...group,'artist-credit':[{name:'Wrong artist'}]}]},{artists:[]}]);
   assert.equal((await resolveCover({album:'Discovery',artist:'Daft Punk'},unrelated)).url,null,'same album title from another artist is not used');
   const alias=transport([{'release-groups':[]},{artists:[{id,name:'Alternate credit',aliases:[{name:'Daft Punk'}]}]},{'release-groups':[group]},{images:[{front:true}]}]);

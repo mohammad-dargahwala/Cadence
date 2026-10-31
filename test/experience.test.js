@@ -149,6 +149,11 @@ function harness(transport='web',reduceMotion=false) {
   assert.equal(stale.body.children[0].querySelector('img').src,'data:image/png;base64,AQ==','a late lookup cannot replace the next album artwork');
   const optedOut=harness('desktop');await flush();optedOut.store.saveSettings({experience:{musicSource:'desktop',musicMode:'full',artworkLookup:false}});optedOut.timer({running:false});await flush();
   assert.equal(optedOut.requests.some(r=>r.url==='/api/artwork'),false,'disabled lookup sends no catalog request');
+  const directCovers=harness('desktop');await flush();
+  directCovers.context.window.CadenceArtworkCatalog={resolveCover:async(input,options)=>{assert.equal(input.album,'Album one');assert.equal(options.verifyImages,false);return {url:'https://coverartarchive.org/release-group/direct/front-250'};}};
+  directCovers.timer({running:false});await flush();
+  assert.equal(directCovers.body.children[0].querySelector('img').src,'https://coverartarchive.org/release-group/direct/front-250');
+  assert.equal(directCovers.requests.some(r=>r.url==='/api/artwork'),false,'direct catalog access avoids the failing server route');
 
   const race=harness();await flush();const release=await race.holdPlay();race.timer();await flush();race.timer({mode:'short'});await flush();assert(race.requests.at(-1).url.endsWith('/pause'),'break pause does not wait for an in-flight resume');release();await flush();
   assert(race.requests.at(-1).url.endsWith('/pause'),'late resume response cannot leave a break playing');
